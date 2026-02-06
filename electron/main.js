@@ -268,6 +268,26 @@ let isQuitting = false
 let closeBehavior = 'tray' // 'tray' | 'close'
 
 /* ======================================================
+   SINGLE INSTANCE LOCK
+   ====================================================== */
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // Another instance is already running - quit this one immediately
+  app.quit()
+} else {
+  // This is the primary instance - listen for second-instance attempts
+  app.on('second-instance', () => {
+    // Someone tried to run a second instance, show our window instead
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+  })
+}
+
+/* ======================================================
    WINDOW / TRAY
    ====================================================== */
 function showMainWindow() {
