@@ -1,0 +1,67 @@
+# Electron Release Workflow
+# Triggers on version tags (v1.0.0, v0.2.0, etc.)
+# Builds Windows + Linux artifacts and uploads to GitHub Releases
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on any tag starting with 'v'
+
+# Required for creating releases and uploading artifacts
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        # Build on Windows and Ubuntu runners
+        # Each runner builds its native platform artifacts
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      # 1. Check out the tagged commit
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js 20 with npm cache
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # 3. Install dependencies (ci is faster and more strict than install)
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Build the Vite frontend
+      - name: Build frontend
+        run: npm run build
+
+      # 5. Build Electron app and publish to GitHub Releases
+      # GH_TOKEN is required for electron-builder to upload artifacts
+      # Windows runner builds Windows artifacts, Linux runner builds Linux artifacts
+      - name: Build and release Electron app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            npx electron-builder --win --publish always
+          else
+            npx electron-builder --linux --publish always
+          fi
+        shell: bash
+
+  # Optional: Create a single release job that waits for all builds
+  # This ensures the release is only created once all artifacts are ready
+  finalize:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release complete
+        run: echo "All platform builds uploaded to GitHub Release"
