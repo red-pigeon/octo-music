@@ -431,6 +431,7 @@ async function handleToggleFavorite(e) {
   padding-bottom: 10px;
   padding-left: 10px;
   position: relative;
+  min-width: 0;
 }
 
 .cover img {
@@ -650,13 +651,12 @@ async function handleToggleFavorite(e) {
   font-size: 16px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
-
   line-height: 1.2em;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  line-clamp: 1;
-  -webkit-line-clamp: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  display: block;
 }
 
 .titleLink {
@@ -677,11 +677,6 @@ async function handleToggleFavorite(e) {
   text-decoration: underline;
 }
 
-.album.variant-tile.with-details.has-artist .title {
-  line-clamp: 1;
-  -webkit-line-clamp: 1;
-}
-
 .artist {
   font-size: 12px;
   font-weight: 400;
@@ -691,7 +686,7 @@ async function handleToggleFavorite(e) {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.85);
-  width: fit-content;
+  max-width: 100%;
 }
 
 .meta {

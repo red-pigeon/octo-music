@@ -49,6 +49,7 @@ import {
   mdiHome,
   mdiMusic,
   mdiAccountMusic,
+  mdiPlaylistMusic,
   mdiHeart,
   mdiCog
 } from '@mdi/js'
@@ -59,13 +60,14 @@ const route = useRoute()
 const hideNav = computed(() => route.path === '/login')
 
 function isActiveItem(key) {
-  const routeMap = { home: '/', 'my-music': '/my-music', songs: '/songs', favorites: '/favorites', settings: '/settings' }
+  const routeMap = { home: '/', 'my-music': '/my-music', playlists: '/playlists', songs: '/songs', favorites: '/favorites', settings: '/settings' }
   return routeMap[key] === route.path
 }
 
 const navItems = computed(() => [
   { key: 'home', label: 'Home', icon: mdiHome, action: () => router.push('/') },
   { key: 'my-music', label: 'My Music', icon: mdiAccountMusic, action: () => router.push('/my-music') },
+  { key: 'playlists', label: 'Playlists', icon: mdiPlaylistMusic, action: () => router.push('/playlists') },
   { key: 'favorites', label: 'Favorites', icon: mdiHeart, action: () => router.push('/favorites') },
   { key: 'songs', label: 'Songs', icon: mdiMusic, action: () => router.push('/songs') },
   { key: 'settings', label: 'Settings', icon: mdiCog, action: () => router.push('/settings') }

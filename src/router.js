@@ -14,6 +14,7 @@ const Album = () => import('./pages/Album.vue')
 const Artist = () => import('./pages/Artist.vue')
 const MyMusic = () => import('./pages/MyMusic.vue')
 const Playlist = () => import('./pages/Playlist.vue')
+const Playlists = () => import('./pages/Playlists.vue')
 const Songs = () => import('./pages/Songs.vue')
 const Favorites = () => import('./pages/Favorites.vue')
 const Settings = () => import('./pages/Settings.vue')
@@ -21,6 +22,7 @@ const Settings = () => import('./pages/Settings.vue')
 const routes = [
     { path: '/', component: Home, meta: { requiresAuth: true } },
     { path: '/my-music', component: MyMusic, meta: { requiresAuth: true } },
+    { path: '/playlists', component: Playlists, meta: { requiresAuth: true } },
     { path: '/favorites', component: Favorites, meta: { requiresAuth: true } },
     { path: '/settings', component: Settings, meta: { requiresAuth: true } },
     { path: '/albums', redirect: '/my-music' },
