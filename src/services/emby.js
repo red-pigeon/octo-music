@@ -330,6 +330,55 @@ export async function embyGetAllSongs({ serverUrl, token, userId, limit = 500, s
     return embyFetchJson({ serverUrl, token, apiPath: path })
 }
 
+/**
+ * Fetch songs with optional server-side filtering.
+ * Supports letter filtering and search for efficient lazy loading.
+ * 
+ * @param {Object} params
+ * @param {string} params.serverUrl - Server URL
+ * @param {string} params.token - Auth token
+ * @param {string} params.userId - User ID
+ * @param {number} params.startIndex - Start index for pagination
+ * @param {number} params.limit - Number of items to fetch
+ * @param {Object} params.filters - Optional filters
+ * @param {string} params.filters.letter - Filter by first letter ('A'-'Z', '#' for non-alpha, 'All' for none)
+ * @param {string} params.filters.search - Search term to filter by
+ */
+export async function embyGetSongsPage({ serverUrl, token, userId, startIndex = 0, limit = 500, filters = {} }) {
+    let path =
+        `/Users/${encodeURIComponent(userId || "")}/Items` +
+        `?IncludeItemTypes=Audio` +
+        `&SortBy=SortName` +
+        `&SortOrder=Ascending` +
+        `&StartIndex=${encodeURIComponent(startIndex)}` +
+        `&Limit=${encodeURIComponent(limit)}` +
+        `&Recursive=true` +
+        `&Fields=PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,RunTimeTicks,UserData,DateCreated` +
+        `&EnableImageTypes=Primary,Backdrop,Thumb` +
+        `&ImageTypeLimit=1`
+    
+    // Apply letter filter using server-side filtering
+    if (filters.letter && filters.letter !== 'All') {
+        if (filters.letter === '#') {
+            path += `&NameLessThan=A`
+        } else if (/^[A-Z]$/i.test(filters.letter)) {
+            const letter = filters.letter.toUpperCase()
+            const nextLetter = String.fromCharCode(letter.charCodeAt(0) + 1)
+            path += `&NameStartsWithOrGreater=${encodeURIComponent(letter)}`
+            if (nextLetter <= 'Z') {
+                path += `&NameLessThan=${encodeURIComponent(nextLetter)}`
+            }
+        }
+    }
+    
+    // Apply search filter (optional - for future use)
+    if (filters.search && filters.search.trim()) {
+        path += `&SearchTerm=${encodeURIComponent(filters.search.trim())}`
+    }
+    
+    return embyFetchJson({ serverUrl, token, apiPath: path })
+}
+
 export async function embyPlaybackInfo({ serverUrl, token, userId, itemId, deviceId, playSessionId }) {
     const path =
         `/Items/${encodeURIComponent(itemId || "")}/PlaybackInfo` +

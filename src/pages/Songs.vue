@@ -15,7 +15,7 @@
           @click="handleShuffle"
           aria-label="Shuffle"
           title="Shuffle"
-          :disabled="filteredTracks.length === 0"
+          :disabled="totalTrackCount === 0"
         >
           <span class="icon"><svg viewBox="0 0 24 24"><path :d="mdiShuffle" /></svg></span>
         </PillButton>
@@ -35,7 +35,7 @@
         <div class="tracksCard">
           <div class="tracksHeader">
             <span>Tracks</span>
-            <span class="tracksCount">{{ filteredTracks.length }}</span>
+            <span class="tracksCount">{{ totalTrackCount }}</span>
           </div>
           <div class="trackListHeaderRow has-cover">
             <div class="trackListIndexHeader">#</div>
@@ -78,8 +78,8 @@
             <div :style="{ height: virtualRange.padBottom + 'px' }" aria-hidden="true"></div>
           </div>
 
-          <div v-if="!loading && filteredTracks.length === 0" class="empty">No songs found.</div>
-          <div v-if="loading && allTracks.length > 0" class="loading-more">Loading more...</div>
+          <div v-if="!loading && totalTrackCount === 0" class="empty">No songs found.</div>
+          <div v-if="loading && lazySongs.loadedCount.value > 0" class="loading-more">Loading more...</div>
         </div>
       </div>
       <div v-else class="empty-center">Your Songs library is empty.</div>
@@ -106,12 +106,13 @@ import NowPlayingLocator from '../components/NowPlayingLocator.vue'
 import PillButton from '../components/PillButton.vue'
 import Track from '../components/Track.vue'
 import Spinner from '../components/Spinner.vue'
-import { embyGetAllSongs } from '../services/emby.js'
+import { embyGetSongsPage } from '../services/emby.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore } from '../stores/settings.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
+import { useLazySongs } from '../composables/useLazySongs.js'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
@@ -119,15 +120,20 @@ const settingsStore = useSettingsStore()
 sessionStore.hydrate()
 settingsStore.hydrate()
 
-// Large libraries can get very big; keep the array shallow to avoid deep reactivity overhead.
-const allTracks = shallowRef([])
+// Lazy loading state
+const CHUNK_SIZE = 500
 const loading = ref(false)
 const error = ref('')
 const currentCoverUrl = ref(null)
 
+// Filter state
 const selectedFilter = ref('All')
 const searchTerm = ref('')
 const displayLimit = ref(100)
+
+// For non-"All" filters, we use a regular array since the server filters for us
+const filteredData = shallowRef([])
+const filteredTotalCount = ref(0)
 
 const debouncedSearchTerm = ref('')
 let searchDebounceTimer = null
@@ -157,8 +163,48 @@ const currentPlayingId = computed(() => playbackStore.currentTrackId)
 
 const trackRefs = new Map()
 
+// Lazy loading fetch function
+async function lazyFetchSongs(startIndex, limit, filters) {
+  const { serverUrl, token: authToken, userId } = (await ensureUserId(sessionStore)) || {}
+  if (!serverUrl || !authToken || !userId) {
+    throw new Error('Not authenticated')
+  }
+  
+  const res = await embyGetSongsPage({
+    serverUrl,
+    token: authToken,
+    userId,
+    startIndex,
+    limit,
+    filters: {
+      letter: filters?.letter || 'All',
+      search: filters?.search || ''
+    }
+  })
+  
+  const items = (res?.Items || []).filter(isAudioItem)
+  return {
+    items,
+    totalCount: res?.TotalRecordCount ?? items.length
+  }
+}
+
+// Setup lazy loader for "All" mode
+const lazySongs = useLazySongs({
+  chunkSize: CHUNK_SIZE,
+  prefetchChunks: 1,
+  fetchFn: lazyFetchSongs
+})
+
+// Computed for compatibility - use lazy items when in "All" mode
+const allTracks = computed(() => {
+  // Touch version to track reactivity
+  void lazySongs.itemsVersion.value
+  return lazySongs.getLoadedItems()
+})
+
 const SONGS_STATE_KEY = 'octoPlayer.songsState.v1'
-const hasSongsAll = computed(() => allTracks.value.length > 0)
+const hasSongsAll = computed(() => lazySongs.totalCount.value > 0 || filteredTotalCount.value > 0)
 let fetchRequestId = 0
 let pendingRestore = null
 
@@ -214,8 +260,15 @@ function handleFilterChanged() {
   displayLimit.value = 100
 }
 
-function handleShuffle() {
-  const list = filteredTracks.value
+async function handleShuffle() {
+  // In lazy mode with "All" filter, need to load all items for true shuffle
+  if (!isFilteredMode.value && !lazySongs.isFullyLoaded.value) {
+    loading.value = true
+    await lazySongs.loadAll()
+    loading.value = false
+  }
+  
+  const list = isFilteredMode.value ? filteredData.value : lazySongs.getLoadedItems()
   if (list.length === 0) return
 
   const shuffled = [...list].sort(() => Math.random() - 0.5)
@@ -283,17 +336,27 @@ const nowPlayingInfo = computed(() => {
 function getTrackInfoForId(id) {
   if (!id) return null
 
-  const list = filteredTracks.value
-  for (let i = 0; i < list.length; i += 1) {
-    if (list[i]?.Id === id) {
-      return { id, index: i, total: list.length, inFilteredList: true }
+  // First check in current filtered/visible tracks
+  if (isFilteredMode.value) {
+    const list = filteredData.value
+    for (let i = 0; i < list.length; i += 1) {
+      if (list[i]?.Id === id) {
+        return { id, index: i, total: filteredTotalCount.value, inFilteredList: true }
+      }
+    }
+  } else {
+    // In "All" mode, check loaded items
+    const idx = lazySongs.findIndexById(id)
+    if (idx >= 0) {
+      return { id, index: idx, total: lazySongs.totalCount.value ?? 0, inFilteredList: true }
     }
   }
 
-  const all = allTracks.value
+  // Fallback to checking all loaded items
+  const all = lazySongs.getLoadedItems()
   for (let i = 0; i < all.length; i += 1) {
     if (all[i]?.Id === id) {
-      return { id, index: i, total: all.length, inFilteredList: false }
+      return { id, index: i, total: lazySongs.totalCount.value ?? 0, inFilteredList: false }
     }
   }
 
@@ -433,78 +496,46 @@ function handleFavoriteToggle(e) {
   const track = e?.track
   if (!track) return
 
-  // With a shallowRef array, replace the item to trigger UI updates.
-  const list = allTracks.value
-  const idx = list.findIndex(t => t?.Id === track.Id)
-  if (idx < 0) return
-
-  const prev = list[idx]
-  const prevUserData = prev?.UserData || {}
-  const nextUserData = { ...prevUserData, IsFavorite: !prevUserData.IsFavorite }
-  const next = { ...prev, UserData: nextUserData }
-
-  const nextList = list.slice()
-  nextList[idx] = next
-  allTracks.value = nextList
+  // Update in lazy loader cache
+  lazySongs.updateItem(track.Id, (item) => {
+    const prevUserData = item?.UserData || {}
+    const nextUserData = { ...prevUserData, IsFavorite: !prevUserData.IsFavorite }
+    return { ...item, UserData: nextUserData }
+  })
+  
+  // Also update in filtered data if active
+  if (isFilteredMode.value) {
+    const list = filteredData.value
+    const idx = list.findIndex(t => t?.Id === track.Id)
+    if (idx >= 0) {
+      const prev = list[idx]
+      const prevUserData = prev?.UserData || {}
+      const nextUserData = { ...prevUserData, IsFavorite: !prevUserData.IsFavorite }
+      const next = { ...prev, UserData: nextUserData }
+      const nextList = list.slice()
+      nextList[idx] = next
+      filteredData.value = nextList
+    }
+  }
 }
 
 async function fetchSongs() {
   const requestId = ++fetchRequestId
   loading.value = true
   error.value = ''
+  
   try {
-    const { serverUrl, token: authToken, userId } = (await ensureUserId(sessionStore)) || {}
-    if (!serverUrl || !authToken || !userId) throw new Error('Not authenticated')
-
-    const pageSize = 500
-    let startIndex = 0
-    let total = null
-
-    // Batch commits to avoid re-running filters on every page append.
-    let pending = []
-    let pagesSinceCommit = 0
-
-    while (true) {
-      if (requestId !== fetchRequestId) return
-
-      const res = await embyGetAllSongs({ serverUrl, token: authToken, userId, limit: pageSize, startIndex })
-      const items = (res?.Items || []).filter(isAudioItem)
-
-      if (startIndex === 0) {
-        allTracks.value = items
-        loading.value = false
-
-        if (!currentCoverUrl.value && items.length) {
-          currentCoverUrl.value = coverUrlFor(items[0], sessionStore) || null
-        }
-      } else {
-        pending.push(...items)
-        pagesSinceCommit += 1
-
-        // Commit every ~2 pages (or at end) to keep UI responsive.
-        if (pagesSinceCommit >= 2) {
-          allTracks.value = allTracks.value.concat(pending)
-          pending = []
-          pagesSinceCommit = 0
-          await new Promise((r) => setTimeout(r, 0))
-        }
-      }
-
-      if (total === null) {
-        const t = res?.TotalRecordCount
-        total = typeof t === 'number' && Number.isFinite(t) ? t : null
-      }
-
-      startIndex += items.length
-
-      if (items.length === 0) break
-      if (total !== null && startIndex >= total) break
-      if (items.length < pageSize) break
+    // Initialize lazy loader - this fetches the first chunk and total count
+    await lazySongs.initialize({ letter: 'All', search: '' })
+    
+    // Set cover from first track if available
+    const items = lazySongs.getLoadedItems()
+    if (!currentCoverUrl.value && items.length) {
+      currentCoverUrl.value = coverUrlFor(items[0], sessionStore) || null
     }
-
-    // Final flush.
-    if (pending.length) {
-      allTracks.value = allTracks.value.concat(pending)
+    
+    if (lazySongs.error.value) {
+      error.value = lazySongs.error.value
     }
   } catch (err) {
     error.value = `Failed to load songs: ${err?.message || String(err)}`
@@ -515,45 +546,140 @@ async function fetchSongs() {
   }
 }
 
-const filterLetters = computed(() => {
-  const lettersSet = new Set()
-  let hasHash = false
-
-  allTracks.value.forEach((track) => {
-    const firstChar = track?.Name?.charAt(0)?.toUpperCase() || ''
-    if (/[A-Z]/.test(firstChar)) {
-      lettersSet.add(firstChar)
-    } else {
-      hasHash = true
+// Fetch filtered data when letter filter changes (server-side letter filtering only)
+async function fetchFilteredSongs(letter) {
+  const requestId = ++fetchRequestId
+  loading.value = true
+  error.value = ''
+  
+  try {
+    const { serverUrl, token: authToken, userId } = (await ensureUserId(sessionStore)) || {}
+    if (!serverUrl || !authToken || !userId) throw new Error('Not authenticated')
+    
+    // For letter-filtered views, load all matching results
+    let allItems = []
+    let startIndex = 0
+    let total = null
+    
+    while (true) {
+      if (requestId !== fetchRequestId) return
+      
+      const res = await embyGetSongsPage({
+        serverUrl,
+        token: authToken,
+        userId,
+        startIndex,
+        limit: CHUNK_SIZE,
+        filters: { letter, search: '' }
+      })
+      
+      const items = (res?.Items || []).filter(isAudioItem)
+      allItems = allItems.concat(items)
+      
+      if (total === null) {
+        total = res?.TotalRecordCount ?? 0
+      }
+      
+      startIndex += items.length
+      
+      if (items.length === 0) break
+      if (startIndex >= total) break
+      if (items.length < CHUNK_SIZE) break
     }
-  })
-
-  const orderedBase = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
-  const letters = orderedBase.filter((l) => lettersSet.has(l))
-  if (hasHash) letters.push('#')
-  return ['All', ...letters]
-})
-
-watch(filterLetters, (letters) => {
-  if (!letters.includes(selectedFilter.value)) {
-    selectedFilter.value = 'All'
+    
+    filteredData.value = allItems
+    filteredTotalCount.value = total ?? allItems.length
+    
+  } catch (err) {
+    error.value = `Failed to load songs: ${err?.message || String(err)}`
+  } finally {
+    if (requestId === fetchRequestId) {
+      loading.value = false
+    }
   }
+}
+
+// Watch for letter filter changes (server-side filtering)
+let filterChangeDebounce = null
+watch(
+  selectedFilter,
+  async (letter) => {
+    if (filterChangeDebounce) clearTimeout(filterChangeDebounce)
+    
+    filterChangeDebounce = setTimeout(async () => {
+      if (letter !== 'All') {
+        // Use server-side letter filtering
+        await fetchFilteredSongs(letter)
+      } else {
+        // Clear filtered data, use lazy loading
+        filteredData.value = []
+        filteredTotalCount.value = 0
+      }
+    }, 50)
+  }
+)
+
+// Watch for search term changes - load all items to enable full search
+let searchDebounceAll = null
+watch(
+  debouncedSearchTerm,
+  async (search) => {
+    if (searchDebounceAll) clearTimeout(searchDebounceAll)
+    
+    if (!search || !search.trim()) return // Nothing to do when search is cleared
+    if (selectedFilter.value !== 'All') return // Letter-filtered data is already fully loaded
+    
+    // In "All" mode with search, need to load all items for complete results
+    if (!lazySongs.isFullyLoaded.value) {
+      searchDebounceAll = setTimeout(async () => {
+        loading.value = true
+        await lazySongs.loadAll()
+        loading.value = false
+      }, 100)
+    }
+  }
+)
+
+const filterLetters = computed(() => {
+  // Always show all letters - server-side filtering handles cases where no songs match
+  const orderedBase = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+  return ['All', ...orderedBase, '#']
 })
 
+// Check if we're using letter-filtered mode (server-side letter filtering)
+const isLetterFiltered = computed(() => {
+  return selectedFilter.value !== 'All'
+})
+
+// Total count - either from filtered data or lazy loader
+const totalTrackCount = computed(() => {
+  if (isLetterFiltered.value) {
+    // When letter is filtered, apply client-side search on top
+    const q = debouncedSearchTerm.value.trim().toLowerCase()
+    if (q) {
+      return filteredTracks.value.length
+    }
+    return filteredTotalCount.value
+  }
+  // "All" mode
+  const q = debouncedSearchTerm.value.trim().toLowerCase()
+  if (q) {
+    return filteredTracks.value.length
+  }
+  return lazySongs.totalCount.value ?? 0
+})
+
+// Filtered tracks - apply letter filter from server, search filter client-side
 const filteredTracks = computed(() => {
   const q = debouncedSearchTerm.value.trim().toLowerCase()
-
-  const letterFiltered = selectedFilter.value === 'All'
-    ? allTracks.value
-    : allTracks.value.filter((t) => {
-        const firstChar = t?.Name?.charAt(0)?.toUpperCase() || ''
-        if (selectedFilter.value === '#') return !/[A-Z]/.test(firstChar)
-        return firstChar === selectedFilter.value
-      })
-
-  if (!q) return letterFiltered
-
-  return letterFiltered.filter((t) => {
+  
+  // Base list: either server-filtered (by letter) or lazy-loaded (All)
+  const baseList = isLetterFiltered.value ? filteredData.value : lazySongs.getLoadedItems()
+  
+  if (!q) return baseList
+  
+  // Client-side search filter (preserves original search behavior: name, artist, album)
+  return baseList.filter((t) => {
     const name = String(t?.Name || '').toLowerCase()
     const artist = String(t?.ArtistItems?.[0]?.Name || t?.Artists?.[0] || t?.AlbumArtist || '').toLowerCase()
     const album = String(t?.Album || '').toLowerCase()
@@ -564,7 +690,8 @@ const filteredTracks = computed(() => {
 const listScrollTop = computed(() => Math.max(0, (contentScrollTop.value || 0) - (trackListOffsetTop.value || 0)))
 
 const virtualRange = computed(() => {
-  const total = filteredTracks.value.length
+  // Use totalTrackCount for proper scroll height calculation
+  const total = totalTrackCount.value
   const viewportH = contentClientHeight.value || 0
 
   if (!total || !viewportH) {
@@ -581,10 +708,44 @@ const virtualRange = computed(() => {
   return { start, end, padTop, padBottom }
 })
 
+// Virtual tracks for rendering
 const virtualTracks = computed(() => {
   const { start, end } = virtualRange.value
-  return filteredTracks.value.slice(start, end)
+  const q = debouncedSearchTerm.value.trim().toLowerCase()
+  
+  if (isLetterFiltered.value || q) {
+    // Filtered mode - data is fully loaded (or client-side searched)
+    return filteredTracks.value.slice(start, end)
+  }
+  
+  // Lazy loading mode - get items from lazy loader
+  // Items may be undefined if not yet loaded
+  const result = []
+  for (let i = start; i < end; i++) {
+    const item = lazySongs.getItem(i)
+    if (item) {
+      result.push(item)
+    }
+  }
+  return result
 })
+
+// Trigger lazy loading when visible range changes (only in "All" mode without search)
+watch(
+  [virtualRange, isLetterFiltered, debouncedSearchTerm],
+  async ([range, letterFiltered, search]) => {
+    if (letterFiltered) return // Don't lazy load when letter filter is active
+    if (search && search.trim()) return // Don't lazy load when searching
+    if (!lazySongs.isInitialized.value) return
+    
+    const { start, end } = range
+    if (end <= start) return
+    
+    // Trigger loading of visible range (with prefetch handled by composable)
+    await lazySongs.ensureRange(start, end)
+  },
+  { immediate: true }
+)
 
 onBeforeRouteLeave((to) => {
   fetchRequestId++
@@ -623,13 +784,13 @@ onMounted(async () => {
   
   // If no explicit target, check if current playing track is in the list
   if (!scrollTarget && currentPlayingId.value) {
-    const isInCurrentList = allTracks.value.some(t => t.Id === currentPlayingId.value)
+    const isInCurrentList = lazySongs.findIndexById(currentPlayingId.value) >= 0
     if (isInCurrentList) {
       scrollTarget = currentPlayingId.value
     }
   }
   
-  if (scrollTarget && allTracks.value.length > 0) {
+  if (scrollTarget && lazySongs.totalCount.value > 0) {
     // Ensure the target is visible even if state restore applied a filter/search.
     const info = getTrackInfoForId(scrollTarget)
     if (info && !info.inFilteredList) {
