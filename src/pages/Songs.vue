@@ -268,7 +268,7 @@ async function handleShuffle() {
     loading.value = false
   }
   
-  const list = isFilteredMode.value ? filteredData.value : lazySongs.getLoadedItems()
+  const list = isFilteredMode.value ? filteredTracks.value : lazySongs.getLoadedItems()
   if (list.length === 0) return
 
   const shuffled = [...list].sort(() => Math.random() - 0.5)
@@ -338,10 +338,10 @@ function getTrackInfoForId(id) {
 
   // First check in current filtered/visible tracks
   if (isFilteredMode.value) {
-    const list = filteredData.value
+    const list = filteredTracks.value
     for (let i = 0; i < list.length; i += 1) {
       if (list[i]?.Id === id) {
-        return { id, index: i, total: filteredTotalCount.value, inFilteredList: true }
+        return { id, index: i, total: list.length, inFilteredList: true }
       }
     }
   } else {
@@ -649,6 +649,11 @@ const filterLetters = computed(() => {
 // Check if we're using letter-filtered mode (server-side letter filtering)
 const isLetterFiltered = computed(() => {
   return selectedFilter.value !== 'All'
+})
+
+const isFilteredMode = computed(() => {
+  const q = debouncedSearchTerm.value.trim()
+  return isLetterFiltered.value || Boolean(q)
 })
 
 // Total count - either from filtered data or lazy loader
