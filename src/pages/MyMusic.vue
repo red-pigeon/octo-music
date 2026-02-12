@@ -45,6 +45,7 @@ import { embyFetchJson, embyGetAllAlbums } from '../services/emby.js'
 import { useSessionStore } from '../stores/session.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
+import { useSessionCache } from '../composables/useSessionCache.js'
 import { toggleAlbumFavorite } from '../services/toggleAlbumFavorite.js'
 import { useAlbumQuickPlay } from '../composables/useAlbumQuickPlay.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
@@ -54,16 +55,19 @@ import FilterBar from '../components/FilterBar.vue'
 import Spinner from '../components/Spinner.vue'
 import ArtistAlbumSection from '../components/ArtistAlbumSection.vue'
 
+const router = useRouter()
+const sessionStore = useSessionStore()
+const playbackStore = usePlaybackStore()
+sessionStore.hydrate()
+
+const cache = useSessionCache('mymusic')
+
 const albums = ref([])
 const loading = ref(false)
 const error = ref('')
 const currentCoverUrl = ref(null)
-const sessionStore = useSessionStore()
-const playbackStore = usePlaybackStore()
 const displayLimit = ref(30)
 const searchTerm = ref('')
-sessionStore.hydrate()
-const router = useRouter()
 const selectedFilter = ref('All')
 const filterBarRef = ref(null)
 const albumsContentRef = ref(null)
@@ -214,15 +218,46 @@ async function handleAlbumQuickPlay(e) {
   lastAlbumQuickPlay = await quickPlayAlbum(e, lastAlbumQuickPlay)
 }
 
+async function fetchAlbumsFromServer() {
+  const { serverUrl, token, userId } = sessionStore
+  const result = await embyGetAllAlbums({ serverUrl, token, userId, limit: 500 })
+  return result?.Items || []
+}
+
 async function fetchAlbums() {
   loading.value = true
   error.value = ''
+  
   try {
-    const { serverUrl, token, userId } = sessionStore
-    const result = await embyGetAllAlbums({ serverUrl, token, userId, limit: 500 })
-    albums.value = result?.Items || []
-    if (!currentCoverUrl.value && result?.Items?.length) {
-      currentCoverUrl.value = coverUrlFor(result.Items[0], sessionStore)
+    // Try to load from cache with background check
+    const cached = cache.loadWithBackgroundCheck(
+      fetchAlbumsFromServer,
+      (cached, fresh) => {
+        // Compare counts to detect changes
+        if (!cached) return true
+        return cached.length !== fresh.length
+      },
+      (fresh) => {
+        // Update UI with fresh data
+        albums.value = fresh
+        console.log('[MyMusic] Updated with fresh data from background check')
+      }
+    )
+    
+    if (cached) {
+      // Use cached data immediately
+      albums.value = cached
+    } else {
+      // No cache, fetch from server
+      const data = await fetchAlbumsFromServer()
+      albums.value = data
+      
+      // Save to cache
+      cache.save(data)
+    }
+    
+    if (!currentCoverUrl.value && albums.value.length) {
+      currentCoverUrl.value = coverUrlFor(albums.value[0], sessionStore)
     }
   } catch (err) {
     error.value = `Failed to load albums: ${err.message}`
@@ -303,7 +338,6 @@ onMounted(async () => {
   left: 0;
   right: 0;
 }
-
 
 @media (max-width: 720px) {
   .controls-row {

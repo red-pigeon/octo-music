@@ -133,6 +133,7 @@ import Grid from '../components/Grid.vue'
 import { embyFetchJson } from '../services/emby.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
+import { useSessionCache } from '../composables/useSessionCache.js'
 import { useAlbumQuickPlay } from '../composables/useAlbumQuickPlay.js'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore } from '../stores/settings.js'
@@ -143,6 +144,8 @@ const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 sessionStore.hydrate()
 settingsStore.hydrate()
+
+const cache = useSessionCache('favorites')
 
 const allTracks = ref([])
 const albums = ref([])
@@ -391,61 +394,100 @@ async function handleAlbumQuickPlay(e) {
   albumQuickPlayState = await quickPlayAlbum(e, albumQuickPlayState)
 }
 
+async function fetchFavoritesFromServer() {
+  const { serverUrl, token, userId } = (await ensureUserId(sessionStore)) || {}
+  if (!serverUrl || !token || !userId) {
+    throw new Error('Failed to authenticate')
+  }
+
+  // Fetch favorite tracks
+  const tracksResult = await embyFetchJson({
+    serverUrl,
+    token,
+    apiPath:
+      `/Users/${encodeURIComponent(userId)}/Items` +
+      `?IncludeItemTypes=Audio` +
+      `&Filters=IsFavorite` +
+      `&SortBy=SortName` +
+      `&Recursive=true` +
+      `&Limit=500` +
+      `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,RunTimeTicks,UserData,DateCreated')}`
+  })
+  const tracks = (tracksResult?.Items || []).filter(isAudioItem)
+
+  // Fetch favorite albums
+  const albumsResult = await embyFetchJson({
+    serverUrl,
+    token,
+    apiPath:
+      `/Users/${encodeURIComponent(userId)}/Items` +
+      `?IncludeItemTypes=MusicAlbum` +
+      `&Filters=IsFavorite` +
+      `&SortBy=SortName` +
+      `&Recursive=true` +
+      `&Limit=500` +
+      `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,UserData,ChildCount,RecursiveItemCount')}`
+  })
+  const albumsList = albumsResult?.Items || []
+
+  // Fetch favorite artists
+  const artistsResult = await embyFetchJson({
+    serverUrl,
+    token,
+    apiPath:
+      `/Users/${encodeURIComponent(userId)}/Items` +
+      `?IncludeItemTypes=MusicArtist` +
+      `&Filters=IsFavorite` +
+      `&SortBy=SortName` +
+      `&Recursive=true` +
+      `&Limit=500` +
+      `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,UserData')}` +
+      `&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1`
+  })
+  const artistsList = artistsResult?.Items || []
+
+  return { tracks, albums: albumsList, artists: artistsList }
+}
+
 async function fetchFavorites() {
   loading.value = true
   error.value = ''
+  
   try {
-    const { serverUrl, token, userId } = (await ensureUserId(sessionStore)) || {}
-    if (!serverUrl || !token || !userId) {
-      error.value = 'Failed to authenticate'
-      return
+    // Try to load from cache with background check
+    const cached = cache.loadWithBackgroundCheck(
+      fetchFavoritesFromServer,
+      (cached, fresh) => {
+        // Compare counts to detect changes
+        if (!cached) return true
+        return cached.tracks?.length !== fresh.tracks?.length ||
+               cached.albums?.length !== fresh.albums?.length ||
+               cached.artists?.length !== fresh.artists?.length
+      },
+      (fresh) => {
+        // Update UI with fresh data
+        allTracks.value = fresh.tracks
+        albums.value = fresh.albums
+        artists.value = fresh.artists
+        console.log('[Favorites] Updated with fresh data from background check')
+      }
+    )
+    
+    if (cached) {
+      // Use cached data immediately
+      allTracks.value = cached.tracks || []
+      albums.value = cached.albums || []
+      artists.value = cached.artists || []
+    } else {
+      // No cache, fetch from server
+      const data = await fetchFavoritesFromServer()
+      allTracks.value = data.tracks
+      albums.value = data.albums
+      artists.value = data.artists
+      
+      // Save to cache
+      cache.save({ tracks: data.tracks, albums: data.albums, artists: data.artists })
     }
-
-    // Fetch favorite tracks
-    const tracksResult = await embyFetchJson({
-      serverUrl,
-      token,
-      apiPath:
-        `/Users/${encodeURIComponent(userId)}/Items` +
-        `?IncludeItemTypes=Audio` +
-        `&Filters=IsFavorite` +
-        `&SortBy=SortName` +
-        `&Recursive=true` +
-        `&Limit=500` +
-        `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,RunTimeTicks,UserData,DateCreated')}`
-    })
-    allTracks.value = (tracksResult?.Items || []).filter(isAudioItem)
-
-    // Fetch favorite albums
-    const albumsResult = await embyFetchJson({
-      serverUrl,
-      token,
-      apiPath:
-        `/Users/${encodeURIComponent(userId)}/Items` +
-        `?IncludeItemTypes=MusicAlbum` +
-        `&Filters=IsFavorite` +
-        `&SortBy=SortName` +
-        `&Recursive=true` +
-        `&Limit=500` +
-        `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,UserData,ChildCount,RecursiveItemCount')}`
-    })
-    albums.value = albumsResult?.Items || []
-
-    // Fetch favorite artists
-    const artistsResult = await embyFetchJson({
-      serverUrl,
-      token,
-      apiPath:
-        `/Users/${encodeURIComponent(userId)}/Items` +
-        `?IncludeItemTypes=MusicArtist` +
-        `&Filters=IsFavorite` +
-        `&SortBy=SortName` +
-        `&Recursive=true` +
-        `&Limit=500` +
-        `&Fields=${encodeURIComponent('PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,UserData')}` +
-        `&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1`
-    })
-    artists.value = artistsResult?.Items || []
 
     // Set initial cover URL
     if (!currentCoverUrl.value) {

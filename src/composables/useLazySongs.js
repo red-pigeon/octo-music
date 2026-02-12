@@ -7,17 +7,22 @@
 
 import { ref, computed } from 'vue'
 
+const CACHE_KEY_PREFIX = 'octoPlayer.songsCache.v1'
+
 /**
  * Composable for lazy loading songs with virtual scroll support.
  * 
  * Instead of loading all songs upfront, this loads chunks on-demand
  * as the user scrolls. Supports jumping to any position.
+ * 
+ * Now includes localStorage caching for instant subsequent loads.
  */
 export function useLazySongs(options = {}) {
   const {
     chunkSize = 500,
     prefetchChunks = 1,
     fetchFn = null, // async (startIndex, limit, filters) => { items, totalCount }
+    cacheKey = 'default', // Unique key for this cache (e.g., 'songs', 'favorites')
   } = options
 
   // Sparse storage: Map<index, track>
@@ -31,6 +36,9 @@ export function useLazySongs(options = {}) {
   const totalCount = ref(null)
   const isInitialized = ref(false)
   const error = ref('')
+  const cacheTimestamp = ref(null)
+  const isBackgroundRefreshing = ref(false)
+  const hasBackgroundUpdate = ref(false)
   
   // Current filter state (for cache invalidation)
   const currentFilters = ref({ letter: 'All', search: '' })
@@ -66,6 +74,96 @@ export function useLazySongs(options = {}) {
   })
 
   /**
+   * Get the full cache key for localStorage
+   */
+  function getCacheStorageKey() {
+    return `${CACHE_KEY_PREFIX}.${cacheKey}`
+  }
+
+  /**
+   * Save current state to localStorage
+   */
+  function saveToCache() {
+    if (typeof localStorage === 'undefined') return
+    
+    try {
+      const data = {
+        items: Array.from(itemsMap.entries()),
+        totalCount: totalCount.value,
+        loadedChunks: Array.from(loadedChunks),
+        filters: currentFilters.value,
+        timestamp: Date.now(),
+      }
+      
+      localStorage.setItem(getCacheStorageKey(), JSON.stringify(data))
+    } catch (err) {
+      // Quota exceeded or other error - just continue without cache
+      console.warn('Failed to save songs cache:', err)
+    }
+  }
+
+  /**
+   * Load state from localStorage
+   * Returns true if cache was restored, false otherwise
+   */
+  function loadFromCache() {
+    if (typeof localStorage === 'undefined') return false
+    
+    try {
+      const raw = localStorage.getItem(getCacheStorageKey())
+      if (!raw) return false
+      
+      const data = JSON.parse(raw)
+      
+      // Validate cache structure
+      if (!data || !Array.isArray(data.items) || typeof data.totalCount !== 'number') {
+        return false
+      }
+      
+      // Restore data
+      itemsMap.clear()
+      data.items.forEach(([idx, item]) => {
+        itemsMap.set(idx, item)
+      })
+      
+      totalCount.value = data.totalCount
+      
+      loadedChunks.clear()
+      if (Array.isArray(data.loadedChunks)) {
+        data.loadedChunks.forEach(chunk => loadedChunks.add(chunk))
+      }
+      
+      if (data.filters) {
+        currentFilters.value = data.filters
+      }
+      
+      cacheTimestamp.value = data.timestamp || null
+      isInitialized.value = true
+      itemsVersion.value++
+      
+      console.log(`[useLazySongs] Loaded ${itemsMap.size} items from cache`)
+      return true
+    } catch (err) {
+      console.warn('Failed to load songs cache:', err)
+      return false
+    }
+  }
+
+  /**
+   * Clear localStorage cache
+   */
+  function clearStoredCache() {
+    if (typeof localStorage === 'undefined') return
+
+    try {
+      localStorage.removeItem(getCacheStorageKey())
+      cacheTimestamp.value = null
+    } catch (err) {
+      console.warn('Failed to clear songs cache:', err)
+    }
+  }
+
+  /**
    * Clear all cached data (e.g., when filters change)
    */
   function clearCache() {
@@ -77,8 +175,9 @@ export function useLazySongs(options = {}) {
 
   /**
    * Initialize and get total count
+   * Will attempt to load from cache first
    */
-  async function initialize(filters = {}) {
+  async function initialize(filters = {}, { skipCache = false } = {}) {
     if (!fetchFn) {
       error.value = 'No fetch function provided'
       return
@@ -86,12 +185,20 @@ export function useLazySongs(options = {}) {
     
     error.value = ''
     
-    // If filters changed, clear cache
+    // Check if filters changed - invalidate cache if so
     const filtersKey = JSON.stringify(filters)
-    if (filtersKey !== JSON.stringify(currentFilters.value)) {
+    const currentFiltersKey = JSON.stringify(currentFilters.value)
+    
+    if (filtersKey !== currentFiltersKey) {
       clearCache()
+      clearStoredCache()
       currentFilters.value = filters
       totalCount.value = null
+    }
+    
+    // Try to load from cache unless explicitly skipped
+    if (!skipCache && loadFromCache()) {
+      return
     }
     
     try {
@@ -110,6 +217,9 @@ export function useLazySongs(options = {}) {
       }
       
       isInitialized.value = true
+      
+      // Save to cache
+      saveToCache()
     } catch (err) {
       error.value = `Failed to initialize: ${err?.message || String(err)}`
     }
@@ -161,6 +271,9 @@ export function useLazySongs(options = {}) {
       
       loadedChunks.add(chunkIndex)
       itemsVersion.value++
+      
+      // Update cache
+      saveToCache()
     } catch (err) {
       error.value = `Failed to load chunk ${chunkIndex}: ${err?.message || String(err)}`
     } finally {
@@ -273,6 +386,8 @@ export function useLazySongs(options = {}) {
       if (item?.Id === itemId) {
         itemsMap.set(idx, updateFn(item))
         itemsVersion.value++
+        // Update cache after modification
+        saveToCache()
         break
       }
     }
@@ -290,6 +405,22 @@ export function useLazySongs(options = {}) {
     return -1
   }
 
+  /**
+   * Force refresh from server (bypass cache)
+   */
+  async function refresh() {
+    clearCache()
+    clearStoredCache()
+    await initialize(currentFilters.value, { skipCache: true })
+  }
+
+  /**
+   * Clear background update flag
+   */
+  function clearBackgroundUpdateFlag() {
+    hasBackgroundUpdate.value = false
+  }
+
   return {
     // State
     items,
@@ -299,6 +430,9 @@ export function useLazySongs(options = {}) {
     isFullyLoaded,
     error,
     itemsVersion,
+    cacheTimestamp,
+    isBackgroundRefreshing,
+    hasBackgroundUpdate,
     
     // Methods
     initialize,
@@ -315,5 +449,7 @@ export function useLazySongs(options = {}) {
     updateItem,
     findIndexById,
     clearCache,
+    refresh,
+    clearBackgroundUpdateFlag,
   }
 }

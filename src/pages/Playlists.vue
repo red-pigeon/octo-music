@@ -69,11 +69,14 @@ import Grid from '../components/Grid.vue'
 import { embyFetchJson } from '../services/emby.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor } from '../services/mediaUtils.js'
+import { useSessionCache } from '../composables/useSessionCache.js'
 import { useSessionStore } from '../stores/session.js'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
 sessionStore.hydrate()
+
+const cache = useSessionCache('playlists')
 
 const playlists = ref([])
 const loading = ref(false)
@@ -182,20 +185,50 @@ function handlePlaylistOpen(e) {
   }
 }
 
+async function fetchPlaylistsFromServer() {
+  const { serverUrl, token, userId } = (await ensureUserId(sessionStore)) || {}
+  if (!serverUrl || !token || !userId) throw new Error('Not authenticated')
+
+  const res = await embyFetchJson({
+    serverUrl,
+    token,
+    apiPath: `/Users/${encodeURIComponent(userId)}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=SortName&SortOrder=Ascending&Fields=PrimaryImageAspectRatio,DateCreated`
+  })
+
+  return res?.Items || []
+}
+
 async function fetchPlaylists() {
   error.value = ''
   loading.value = true
+  
   try {
-    const { serverUrl, token, userId } = (await ensureUserId(sessionStore)) || {}
-    if (!serverUrl || !token || !userId) throw new Error('Not authenticated')
-
-    const res = await embyFetchJson({
-      serverUrl,
-      token,
-      apiPath: `/Users/${encodeURIComponent(userId)}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=SortName&SortOrder=Ascending&Fields=PrimaryImageAspectRatio,DateCreated`
-    })
-
-    playlists.value = res?.Items || []
+    // Try to load from cache with background check
+    const cached = cache.loadWithBackgroundCheck(
+      fetchPlaylistsFromServer,
+      (cached, fresh) => {
+        // Compare counts to detect changes
+        if (!cached) return true
+        return cached.length !== fresh.length
+      },
+      (fresh) => {
+        // Update UI with fresh data
+        playlists.value = fresh
+        console.log('[Playlists] Updated with fresh data from background check')
+      }
+    )
+    
+    if (cached) {
+      // Use cached data immediately
+      playlists.value = cached
+    } else {
+      // No cache, fetch from server
+      const data = await fetchPlaylistsFromServer()
+      playlists.value = data
+      
+      // Save to cache
+      cache.save(data)
+    }
   } catch (err) {
     error.value = 'Failed to load playlists. ' + (err?.message || String(err))
   } finally {

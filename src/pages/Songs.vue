@@ -193,7 +193,8 @@ async function lazyFetchSongs(startIndex, limit, filters) {
 const lazySongs = useLazySongs({
   chunkSize: CHUNK_SIZE,
   prefetchChunks: 1,
-  fetchFn: lazyFetchSongs
+  fetchFn: lazyFetchSongs,
+  cacheKey: 'songs',
 })
 
 // Computed for compatibility - use lazy items when in "All" mode
@@ -525,8 +526,8 @@ async function fetchSongs() {
   error.value = ''
   
   try {
-    // Initialize lazy loader - this fetches the first chunk and total count
-    await lazySongs.initialize({ letter: 'All', search: '' })
+    // Initialize lazy loader with background check - this fetches the first chunk and total count
+    await lazySongs.initialize({ letter: 'All', search: '' }, { backgroundCheck: true })
     
     // Set cover from first track if available
     const items = lazySongs.getLoadedItems()
