@@ -200,20 +200,18 @@ async function doClearCache() {
 
 <style scoped>
 .settings-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  background: transparent;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
+  overflow-y: auto;
 }
 
 .settings-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   position: relative;
 }
@@ -244,9 +242,6 @@ async function doClearCache() {
 }
 
 .settings-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-left: 56px;
   padding-right: 56px;
   padding-top: 126px;
@@ -472,9 +467,6 @@ button:disabled {
   font-size: 12px;
   opacity: 0.7;
 }
-
-.settings-content::-webkit-scrollbar { display: none; }
-.settings-content { scrollbar-width: none; -ms-overflow-style: none; }
 
 .status.err {
   color: rgba(255, 160, 160, 0.9);

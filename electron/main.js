@@ -600,7 +600,6 @@ readyPromise.then(() => {
     ipcMain.handle('settings:setCloseBehavior', (_event, behavior) => {
       if (behavior === 'tray' || behavior === 'close') {
         closeBehavior = behavior
-        console.log('[IPC] Close behavior set to:', behavior)
       }
     })
     

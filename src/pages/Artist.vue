@@ -347,14 +347,13 @@ watch(
 
 <style scoped>
 .artistPage {
-  position: relative;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.artistPage::-webkit-scrollbar {
-  display: none;
 }
 
 .artistLayout {

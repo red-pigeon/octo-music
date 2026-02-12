@@ -1,5 +1,5 @@
 <template>
-  <div class="albums-page">
+  <div class="albums-page" ref="albumsContentRef" @scroll="handleContentScroll">
     <BackgroundGradient :coverUrl="currentCoverUrl" />
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -20,7 +20,7 @@
         />
       </div>
 
-      <div v-if="hasAlbums" ref="albumsContentRef" class="albums-content" @scroll="handleContentScroll">
+      <div v-if="hasAlbums" class="albums-content">
         <ArtistAlbumSection
           v-for="artist in displayedAlbums"
           :key="artist.name"
@@ -273,20 +273,18 @@ onMounted(async () => {
 
 <style scoped>
 .albums-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  background: transparent;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
+  overflow-y: auto;
 }
 
 .albums-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   position: relative;
 }
@@ -342,9 +340,6 @@ onMounted(async () => {
 }
 
 .albums-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-left: 56px;
   padding-right: 56px;
   padding-top: 146px;
@@ -371,7 +366,4 @@ onMounted(async () => {
   margin: 1rem 56px;
   max-width: 1096px;
 }
-
-.albums-content::-webkit-scrollbar { display: none; }
-.albums-content { scrollbar-width: none; -ms-overflow-style: none; }
 </style>

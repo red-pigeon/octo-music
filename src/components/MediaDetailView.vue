@@ -366,17 +366,15 @@ watch(
 
 <style scoped>
 .albumPage, .playlistPage {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: calc(100vh - 32px);
-  padding: 50px 0 180px;
+  padding: 66px 0 180px;
   display: flex;
   flex-direction: column;
-  position: relative;
   z-index: 1;
   overflow-y: auto;
-  scrollbar-width: none;
 }
-.albumPage::-webkit-scrollbar, .playlistPage::-webkit-scrollbar { display: none; }
 
 .playlistPage {
   padding-bottom: 216px;

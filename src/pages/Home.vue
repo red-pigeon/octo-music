@@ -417,17 +417,14 @@ onUnmounted(() => {
 
 <style scoped>
 .container {
-  width: 100%;
-  height: calc(100vh - 32px);
+  position: absolute;
+  inset: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  position: relative;
   z-index: 1;
   overflow-y: auto;
-  scrollbar-width: none;
 }
-.container::-webkit-scrollbar { display: none; }
 
 .error {
   margin-top: 12px;
@@ -446,7 +443,7 @@ onUnmounted(() => {
   width: 100%;
   max-width: 1096px;
   margin: 0 auto;
-  padding: 50px 56px 160px 56px;
+  padding: 66px 56px 160px 56px;
   display: flex;
   flex-direction: column;
   gap: 24px;

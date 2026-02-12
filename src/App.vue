@@ -77,6 +77,8 @@ onUnmounted(() => {
 }
 
 .app-shell.authed {
+  align-items: stretch;
+  justify-content: stretch;
   /* Simple dark gradient for home */
   background: linear-gradient(180deg, #0f1118 0%, #0b0d14 50%, #07090f 100%);
 }

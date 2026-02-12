@@ -6,6 +6,7 @@
  */
 
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { nextTick } from 'vue'
 import { loadConnection } from './services/emby.js'
 
 const Home = () => import('./pages/Home.vue')
@@ -38,7 +39,10 @@ const routes = [
 
 const router = createRouter({
     history: createWebHashHistory(),
-    routes
+    routes,
+    scrollBehavior() {
+        return { top: 0 }
+    }
 })
 
 router.beforeEach((to) => {
@@ -47,6 +51,24 @@ router.beforeEach((to) => {
     if (to.meta?.requiresAuth && !authed) {
         return { path: '/login' }
     }
+})
+
+router.afterEach(() => {
+    const stateKeys = [
+        'octoPlayer.songsState.v1',
+        'octoPlayer.playlistsState.v1',
+        'octoPlayer.myMusicState.v1',
+        'octoPlayer.favoritesState.v1'
+    ]
+    stateKeys.forEach((k) => sessionStorage.removeItem(k))
+
+    nextTick(() => {
+        const shell = document.querySelector('.app-shell')
+        if (shell) {
+            const scroller = shell.querySelector('[class$="-page"], [class$="Page"], .container')
+            if (scroller) scroller.scrollTop = 0
+        }
+    })
 })
 
 export default router

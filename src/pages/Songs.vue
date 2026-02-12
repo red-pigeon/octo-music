@@ -1,5 +1,5 @@
 <template>
-  <div class="songs-page">
+  <div class="songs-page" ref="songsContentRef" @scroll="handleContentScroll">
     <BackgroundGradient :coverUrl="currentCoverUrl" />
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -31,7 +31,7 @@
         />
       </div>
 
-      <div v-if="hasSongsAll" ref="songsContentRef" class="songs-content" @scroll="handleContentScroll">
+      <div v-if="hasSongsAll" class="songs-content">
         <div class="tracksCard">
           <div class="tracksHeader">
             <span>Tracks</span>
@@ -837,20 +837,18 @@ watch(
 
 <style scoped>
 .songs-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  background: transparent;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
+  overflow-y: auto;
 }
 
 .songs-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   position: relative;
 }
@@ -906,9 +904,6 @@ watch(
 }
 
 .songs-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-left: 56px;
   padding-right: 56px;
   padding-top: 146px;
@@ -917,9 +912,6 @@ watch(
   max-width: 1096px;
   margin: 0 auto;
 }
-
-.songs-content::-webkit-scrollbar { display: none; }
-.songs-content { scrollbar-width: none; -ms-overflow-style: none; }
 
 .tracksCard {
   --track-list-cols: 1fr 24ch 12ch 6ch;

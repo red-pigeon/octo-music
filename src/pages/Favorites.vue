@@ -1,5 +1,5 @@
 <template>
-  <div class="favorites-page">
+  <div class="favorites-page" ref="contentRef" @scroll="handleContentScroll">
     <BackgroundGradient :coverUrl="currentCoverUrl" />
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -20,7 +20,7 @@
         />
       </div>
 
-      <div ref="contentRef" class="favorites-content" @scroll="handleContentScroll">
+      <div class="favorites-content">
         <!-- Favorite Artists Section -->
         <div v-if="displayedArtists.length > 0" class="section">
           <div class="sectionHeader">
@@ -539,20 +539,18 @@ onMounted(async () => {
 
 <style scoped>
 .favorites-page {
-  position: fixed;
-  top: 20px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  background: transparent;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
+  overflow-y: auto;
 }
 
 .favorites-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   position: relative;
 }
@@ -613,12 +611,9 @@ onMounted(async () => {
 }
 
 .favorites-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-left: 56px;
   padding-right: 56px;
-  padding-top: 126px;
+  padding-top: 146px;
   padding-bottom: 160px;
   width: 100%;
   max-width: 1096px;
@@ -765,7 +760,4 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0;
 }
-
-.favorites-content::-webkit-scrollbar { display: none; }
-.favorites-content { scrollbar-width: none; -ms-overflow-style: none; }
 </style>

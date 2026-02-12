@@ -5,7 +5,7 @@
  * See LICENSE file in the project root for full license information.
  -->
 <template>
-  <div class="playlists-page">
+  <div class="playlists-page" ref="contentRef" @scroll="handleContentScroll">
     <BackgroundGradient :coverUrl="currentCoverUrl" />
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -26,7 +26,7 @@
         />
       </div>
 
-      <div ref="contentRef" class="playlists-content" @scroll="handleContentScroll">
+      <div class="playlists-content">
         <div v-if="filteredPlaylists.length > 0" class="section">
           <div class="sectionHeader">
             <span>Your Playlists</span>
@@ -227,20 +227,18 @@ onBeforeRouteLeave(() => {
 
 <style scoped>
 .playlists-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  background: transparent;
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
+  overflow-y: auto;
 }
 
 .playlists-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   position: relative;
 }
@@ -261,9 +259,6 @@ onBeforeRouteLeave(() => {
 }
 
 .playlists-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-left: 56px;
   padding-right: 56px;
   padding-top: 146px;
@@ -272,9 +267,6 @@ onBeforeRouteLeave(() => {
   max-width: 1096px;
   margin: 0 auto;
 }
-
-.playlists-content::-webkit-scrollbar { display: none; }
-.playlists-content { scrollbar-width: none; -ms-overflow-style: none; }
 
 .section {
   margin-bottom: 40px;
