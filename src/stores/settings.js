@@ -16,6 +16,7 @@ export const accentColors = {
     brightOrange: { r: 249, g: 115, b: 22, label: 'Bright Orange' },
     energeticGreen: { r: 34, g: 197, b: 94, label: 'Energetic Green' },
     richPurple: { r: 120, g: 90, b: 255, label: 'Rich Purple' },
+    pureWhite: { r: 255, g: 255, b: 255, label: 'Pure White' },
 }
 
 const defaults = { transcodeEnabled: false, bitrateKbps: 320, format: 'mp3', closeBehavior: 'close', autoScrollToPlayingTrack: true, accentColor: 'richPurple' }

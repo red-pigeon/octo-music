@@ -54,9 +54,13 @@
             :isPlaying="isPlaying"
             :progress="currentPlayingId === it.Id ? currentProgress : 0"
             :roundCover="roundCover"
+            :canToggleFavorite="showTrackFavorites"
+            :isFavorite="it.UserData?.IsFavorite || false"
+            :sessionStore="sessionStore"
             @play="handleTrackPlay"
             @hover="handleItemHover"
             @leave="handleItemLeave"
+            @favorite-toggle="emit('trackfavoritetoggle', $event)"
           />
           <Artist
             v-else-if="it?.Type === 'MusicArtist'"
@@ -140,9 +144,10 @@ const props = defineProps({
   roundCover: { type: Boolean, default: false },
   trackSubtitleMode: { type: String, default: 'artist' },
   sessionStore: { type: Object, default: null },
+  showTrackFavorites: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['trackplay', 'albumplay', 'albumquickplay', 'itemhover', 'itemleave', 'viewplaylist', 'artistopen', 'albumfavoritetoggle'])
+const emit = defineEmits(['trackplay', 'albumplay', 'albumquickplay', 'itemhover', 'itemleave', 'viewplaylist', 'artistopen', 'albumfavoritetoggle', 'trackfavoritetoggle'])
 
 const listElement = ref(null)
 const scrollState = ref({ canScrollLeft: false, canScrollRight: false })

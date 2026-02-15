@@ -24,6 +24,7 @@
           :currentPlayingId="currentPlayingId"
           :isPlaying="isCurrentlyPlaying"
           :sessionStore="sessionStore"
+          :showTrackFavorites="false"
           v-on="rail.listeners"
         />
       </template>
@@ -75,9 +76,168 @@ function handleItemHover(e) {
 
 function handleAlbumFavoriteToggle(e) {
   const album = e?.album || e
-  if (!album?.UserData) return
-  const isFavorite = album.UserData.IsFavorite || false
-  album.UserData.IsFavorite = !isFavorite
+  const isFavorite = e?.isFavorite
+  if (!album) return
+  
+  // Update in all possible rails - create new array references
+  const updateInArray = (arr, setter) => {
+    const idx = arr.findIndex(item => item.Id === album.Id && item.Type === 'MusicAlbum')
+    if (idx >= 0) {
+      const newArr = [...arr]
+      newArr[idx] = {
+        ...newArr[idx],
+        UserData: {
+          ...newArr[idx].UserData,
+          IsFavorite: isFavorite
+        }
+      }
+      setter(newArr)
+    }
+  }
+  
+  updateInArray(latest.value, (v) => latest.value = v)
+  updateInArray(recentlyPlayed.value, (v) => recentlyPlayed.value = v)
+  updateInArray(frequentlyPlayed.value, (v) => frequentlyPlayed.value = v)
+  
+  // Update albums cache
+  updateAlbumsCache(album.Id, isFavorite)
+}
+
+function handleTrackFavoriteToggle(e) {
+  const track = e?.track
+  const isFavorite = e?.isFavorite
+  if (!track) return
+  
+  // Update in all possible rails - create new array references
+  const updateInArray = (arr, setter) => {
+    const idx = arr.findIndex(item => item.Id === track.Id && item.Type === 'Audio')
+    if (idx >= 0) {
+      const newArr = [...arr]
+      newArr[idx] = {
+        ...newArr[idx],
+        UserData: {
+          ...newArr[idx].UserData,
+          IsFavorite: isFavorite
+        }
+      }
+      setter(newArr)
+    }
+  }
+  
+  updateInArray(latest.value, (v) => latest.value = v)
+  updateInArray(recentlyPlayed.value, (v) => recentlyPlayed.value = v)
+  updateInArray(frequentlyPlayed.value, (v) => frequentlyPlayed.value = v)
+  
+  // Update songs cache
+  updateSongsCache(track.Id, isFavorite)
+}
+
+function updateSongsCache(trackId, isFavorite) {
+  try {
+    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.items || !Array.isArray(cacheData.items)) return
+    
+    // Items are stored as [[index, item], [index, item], ...] tuples
+    let updated = false
+    for (let i = 0; i < cacheData.items.length; i++) {
+      const [itemIndex, item] = cacheData.items[i]
+      if (item?.Id === trackId) {
+        cacheData.items[i] = [itemIndex, {
+          ...item,
+          UserData: {
+            ...item.UserData,
+            IsFavorite: isFavorite
+          }
+        }]
+        updated = true
+        break
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Home] Failed to update songs cache:', err)
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(trackId, 'track')
+  }
+}
+
+function updateAlbumsCache(albumId, isFavorite) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data || !Array.isArray(cacheData.data)) return
+    
+    let updated = false
+    cacheData.data = cacheData.data.map(album => {
+      if (album?.Id === albumId) {
+        updated = true
+        return {
+          ...album,
+          UserData: {
+            ...album.UserData,
+            IsFavorite: isFavorite
+          }
+        }
+      }
+      return album
+    })
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Home] Failed to update albums cache:', err)
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(albumId, 'album')
+  }
+}
+
+function updateFavoritesCache(itemId, itemType) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data) return
+    
+    let updated = false
+    if (itemType === 'track' && Array.isArray(cacheData.data.tracks)) {
+      const newTracks = cacheData.data.tracks.filter(t => t.Id !== itemId)
+      if (newTracks.length !== cacheData.data.tracks.length) {
+        cacheData.data.tracks = newTracks
+        updated = true
+      }
+    } else if (itemType === 'album' && Array.isArray(cacheData.data.albums)) {
+      const newAlbums = cacheData.data.albums.filter(a => a.Id !== itemId)
+      if (newAlbums.length !== cacheData.data.albums.length) {
+        cacheData.data.albums = newAlbums
+        updated = true
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Home] Failed to update favorites cache:', err)
+  }
 }
 
 function handleTrackPlay(e) {
@@ -173,6 +333,7 @@ const railDefinitions = computed(() => {
     albumplay: handleAlbumPlay,
     itemhover: handleItemHover,
     albumfavoritetoggle: handleAlbumFavoriteToggle,
+    trackfavoritetoggle: handleTrackFavoriteToggle,
   }
 
   return [

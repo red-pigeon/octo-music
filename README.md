@@ -30,7 +30,9 @@ Build the Vite frontend:
 npm run build
 ```
 
-Create a Windows installer (NSIS) via electron-builder:
+### Windows
+
+Create a Windows installer (NSIS):
 
 ```bash
 npm run dist
@@ -54,6 +56,22 @@ Installer note:
 - The NSIS installer is configured as a per-machine install (defaults to `Program Files`), so Windows will prompt for admin elevation.
 
 If you get file-lock errors (common if the app is still running or Windows Defender is scanning the output), close Octo completely and bump the `version` in `package.json` so the installer filename changes, then rerun `npm run dist`.
+
+### Linux
+
+Create a Linux AppImage:
+
+```bash
+node tools/build-stamped.mjs appimage linux
+```
+
+Or create a `.deb` package:
+
+```bash
+npx electron-builder --linux deb
+```
+
+Outputs will be in the `release-builds/<version>-<timestamp>/` directory.
 
 ## Lint
 

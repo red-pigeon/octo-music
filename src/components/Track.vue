@@ -46,7 +46,7 @@
       </div>
       <div v-if="showAlbum" class="albumCol">{{ albumName }}</div>
       <div v-if="showAddedDate" class="addedDateCol">{{ addedDate }}</div>
-      <div class="duration">
+      <div class="duration" v-if="props.track?.RunTimeTicks">
         <span class="duration-text">{{ duration }}</span>
       </div>
       <button
@@ -62,7 +62,7 @@
         :disabled="togglingFavorite"
       >
         <svg viewBox="0 0 24 24" class="favorite-icon">
-          <path :d="isHoveringButton ? (isFavorite ? mdiHeartMinus : mdiHeartPlus) : (isFavorite ? mdiHeartFill : mdiHeart)" fill="currentColor" />
+          <path :d="isHoveringButton ? (isFavorite ? mdiHeartMinus : mdiHeartPlus) : (isFavorite ? mdiHeart : mdiHeartOutline)" fill="currentColor" />
         </svg>
       </button>
     </div>
@@ -75,11 +75,12 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { mdiPlay, mdiPause, mdiHeart, mdiHeartMinus, mdiHeartPlus } from '@mdi/js'
+import { mdiPlay, mdiPause, mdiHeart, mdiHeartOutline, mdiHeartMinus, mdiHeartPlus } from '@mdi/js'
 import defaultCover from '../assets/default_cover.png'
 import { formatTicksMSS, formatDateDMY } from '../utils/timeUtils.js'
 import { useEmbyCoverImage } from '../composables/useEmbyCoverImage.js'
 import { embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { getArtistFromItem } from '../services/mediaUtils.js'
 import ArtistLink from './ArtistLink.vue'
 
 const props = defineProps({
@@ -108,7 +109,6 @@ const emit = defineEmits(['play', 'hover', 'leave', 'favorite-toggle'])
 
 const togglingFavorite = ref(false)
 const isHoveringButton = ref(false)
-const mdiHeartFill = mdiHeart
 
 const { coverImageUrl, displayCover, handleCoverError } = useEmbyCoverImage({
   watchSource: () => props.coverUrl,
@@ -120,11 +120,7 @@ const { coverImageUrl, displayCover, handleCoverError } = useEmbyCoverImage({
 
 const title = computed(() => props.track?.Name || 'Unknown Track')
 
-const artist = computed(() => 
-  props.track?.ArtistItems?.[0]?.Name ||
-  props.track?.Artists?.[0] ||
-  props.track?.AlbumArtist
-)
+const artist = computed(() => getArtistFromItem(props.track));
 
 const duration = computed(() => formatTicksMSS(props.track?.RunTimeTicks))
 const albumName = computed(() => props.track?.Album || props.track?.AlbumName || '')
@@ -179,6 +175,8 @@ function handlePlay() {
 async function handleToggleFavorite() {
   if (!props.canToggleFavorite || !props.sessionStore) return
   
+  console.log('[Track] Toggle favorite clicked, current isFavorite:', props.isFavorite, 'track:', props.track?.Name)
+  
   togglingFavorite.value = true
   try {
     const { serverUrl, token, userId } = props.sessionStore
@@ -189,13 +187,17 @@ async function handleToggleFavorite() {
       return
     }
     
+    const newValue = !props.isFavorite
     if (props.isFavorite) {
+      console.log('[Track] Calling embyUnmarkFavorite')
       await embyUnmarkFavorite({ serverUrl, token, userId, itemId })
     } else {
+      console.log('[Track] Calling embyMarkFavorite')
       await embyMarkFavorite({ serverUrl, token, userId, itemId })
     }
     
-    emit('favorite-toggle', { track: props.track, isFavorite: !props.isFavorite })
+    console.log('[Track] API call successful, emitting favorite-toggle with isFavorite:', newValue)
+    emit('favorite-toggle', { track: props.track, isFavorite: newValue })
   } catch (err) {
     console.error('Failed to toggle favorite:', err)
   } finally {
@@ -615,11 +617,11 @@ async function handleToggleFavorite() {
 }
 
 .favorite-btn.is-favorite {
-  color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.9);
+  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
 }
 
 .favorite-btn.is-favorite:hover:not(:disabled) {
-  background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.2);
+  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.2);
 }
 
 .favorite-icon {

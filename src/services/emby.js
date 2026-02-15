@@ -301,6 +301,7 @@ export async function embyFrequentlyPlayedMusic({ serverUrl, token, userId, limi
     return embyFetchJson({ serverUrl, token, apiPath: path })
 }
 
+
 export async function embyGetAllAlbums({ serverUrl, token, userId, limit = 500 }) {
     const path =
         `/Users/${encodeURIComponent(userId || "")}/Items` +
@@ -309,7 +310,7 @@ export async function embyGetAllAlbums({ serverUrl, token, userId, limit = 500 }
         `&SortOrder=Ascending` +
         `&Limit=${encodeURIComponent(limit)}` +
         `&Recursive=true` +
-        `&Fields=PrimaryImageAspectRatio,ImageTags,ArtistItems,AlbumArtist,Artists,PrimaryImageItemId,PrimaryImageTag,ChildCount,RecursiveItemCount,ItemCounts` +
+        `&Fields=PrimaryImageAspectRatio,ImageTags,ArtistItems,AlbumArtist,Artists,PrimaryImageItemId,PrimaryImageTag,ChildCount,RecursiveItemCount,ItemCounts,UserData` +
         `&EnableImageTypes=Primary,Backdrop,Thumb` +
         `&ImageTypeLimit=1`
     return embyFetchJson({ serverUrl, token, apiPath: path })

@@ -9,7 +9,7 @@
     <Grid variant="albums">
       <Album
         v-for="album in artist.albums"
-        :key="album.Id"
+        :key="`${album.Id}-${album.UserData?.IsFavorite ? 'fav' : 'unfav'}`"
         :album="album"
         :coverUrl="coverUrlFor(album, sessionStore)"
         appearance="flat"

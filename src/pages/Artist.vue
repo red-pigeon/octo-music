@@ -30,12 +30,14 @@
               class="actionButton favoriteButton"
               type="button"
               @click="handleFavoriteToggle"
+              @mouseenter="isHoveringFavorite = true"
+              @mouseleave="isHoveringFavorite = false"
               :class="{ 'is-favorite': artist?.UserData?.IsFavorite }"
               :title="artist?.UserData?.IsFavorite ? 'Remove from favorites' : 'Add to favorites'"
               :aria-label="artist?.UserData?.IsFavorite ? 'Remove from favorites' : 'Add to favorites'"
               :disabled="!artist || togglingFavorite"
             >
-              <span class="icon"><svg viewBox="0 0 24 24"><path :d="artist?.UserData?.IsFavorite ? mdiHeartFill : mdiHeart" fill="currentColor" /></svg></span>
+              <span class="icon"><svg viewBox="0 0 24 24"><path :d="isHoveringFavorite ? (artist?.UserData?.IsFavorite ? mdiHeartMinus : mdiHeartPlus) : (artist?.UserData?.IsFavorite ? mdiHeart : mdiHeartOutline)" fill="currentColor" /></svg></span>
             </button>
             <button
               v-if="artist?.Overview"
@@ -62,6 +64,7 @@
         emptyMessage="No top songs found."
         :gridLayout="true"
         :roundCover="true"
+        :showTrackFavorites="false"
         trackSubtitleMode="album"
         :coverUrlFor="(item) => coverUrlFor(item, sessionStore)"
         :isAudioItem="isAudioItem"
@@ -70,6 +73,7 @@
         :progress="currentProgress"
         :sessionStore="sessionStore"
         @trackplay="handleTrackPlay"
+        @trackfavoritetoggle="handleTrackFavoriteToggle"
       />
 
       <!-- Albums Section -->
@@ -114,7 +118,7 @@ import { useRoute, useRouter } from 'vue-router'
 import BackgroundGradient from '../components/BackgroundGradient.vue'
 import MediaRail from '../components/MediaRail.vue'
 import Spinner from '../components/Spinner.vue'
-import { mdiPlay, mdiShuffle, mdiInformation, mdiHeart } from '@mdi/js'
+import { mdiPlay, mdiShuffle, mdiInformation, mdiHeart, mdiHeartOutline, mdiHeartPlus, mdiHeartMinus } from '@mdi/js'
 import { embyFetchJson, embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem, TRACK_FIELDS } from '../services/mediaUtils.js'
@@ -131,8 +135,6 @@ const { handlePlayItem } = usePlaybackController()
 
 sessionStore.hydrate()
 
-const mdiHeartFill = mdiHeart
-
 const artist = ref(null)
 const topSongs = ref([])
 const albums = ref([])
@@ -141,6 +143,7 @@ const error = ref('')
 const gradientCoverUrl = ref(null)
 const showAboutModal = ref(false)
 const togglingFavorite = ref(false)
+const isHoveringFavorite = ref(false)
 
 const currentPlayingId = computed(() => playbackStore.currentTrackId)
 const isCurrentlyPlaying = computed(() => playbackStore.isPlaying)
@@ -296,8 +299,160 @@ async function handleAlbumQuickPlay(e) {
 
 function handleAlbumFavoriteToggle(e) {
   const { album, isFavorite } = e
-  album.UserData = album.UserData || {}
-  album.UserData.IsFavorite = isFavorite
+  if (!album) return
+  
+  console.log('[Artist] handleAlbumFavoriteToggle:', album.Name, 'isFavorite:', isFavorite)
+  
+  // Update in albums array for reactivity - create new array
+  const idx = albums.value.findIndex(a => a.Id === album.Id)
+  if (idx >= 0) {
+    const newAlbums = [...albums.value]
+    newAlbums[idx] = {
+      ...newAlbums[idx],
+      UserData: {
+        ...newAlbums[idx].UserData,
+        IsFavorite: isFavorite
+      }
+    }
+    albums.value = newAlbums
+    console.log('[Artist] Updated albums at index:', idx, 'new value:', albums.value[idx].UserData.IsFavorite)
+  }
+  
+  // Update albums cache
+  updateAlbumsCache(album.Id, isFavorite)
+}
+
+function handleTrackFavoriteToggle(e) {
+  const { track, isFavorite } = e
+  if (!track) return
+  
+  console.log('[Artist] handleTrackFavoriteToggle:', track.Name, 'isFavorite:', isFavorite)
+  
+  // Update in topSongs array with proper reactivity - create new array
+  const idx = topSongs.value.findIndex(t => t.Id === track.Id)
+  if (idx >= 0) {
+    const newTopSongs = [...topSongs.value]
+    newTopSongs[idx] = {
+      ...newTopSongs[idx],
+      UserData: {
+        ...newTopSongs[idx].UserData,
+        IsFavorite: isFavorite
+      }
+    }
+    topSongs.value = newTopSongs
+    console.log('[Artist] Updated topSongs at index:', idx, 'new value:', topSongs.value[idx].UserData.IsFavorite)
+  }
+  
+  // Update songs cache
+  updateSongsCache(track.Id, isFavorite)
+}
+
+function updateSongsCache(trackId, isFavorite) {
+  try {
+    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.items || !Array.isArray(cacheData.items)) return
+    
+    // Items are stored as [[index, item], [index, item], ...] tuples
+    let updated = false
+    for (let i = 0; i < cacheData.items.length; i++) {
+      const [itemIndex, item] = cacheData.items[i]
+      if (item?.Id === trackId) {
+        cacheData.items[i] = [itemIndex, {
+          ...item,
+          UserData: {
+            ...item.UserData,
+            IsFavorite: isFavorite
+          }
+        }]
+        updated = true
+        break
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Artist] Failed to update songs cache:', err)
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(trackId, 'track')
+  }
+}
+
+function updateAlbumsCache(albumId, isFavorite) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data || !Array.isArray(cacheData.data)) return
+    
+    let updated = false
+    cacheData.data = cacheData.data.map(album => {
+      if (album?.Id === albumId) {
+        updated = true
+        return {
+          ...album,
+          UserData: {
+            ...album.UserData,
+            IsFavorite: isFavorite
+          }
+        }
+      }
+      return album
+    })
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Artist] Failed to update albums cache:', err)
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(albumId, 'album')
+  }
+}
+
+function updateFavoritesCache(itemId, itemType) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data) return
+    
+    let updated = false
+    if (itemType === 'track' && Array.isArray(cacheData.data.tracks)) {
+      const newTracks = cacheData.data.tracks.filter(t => t.Id !== itemId)
+      if (newTracks.length !== cacheData.data.tracks.length) {
+        cacheData.data.tracks = newTracks
+        updated = true
+      }
+    } else if (itemType === 'album' && Array.isArray(cacheData.data.albums)) {
+      const newAlbums = cacheData.data.albums.filter(a => a.Id !== itemId)
+      if (newAlbums.length !== cacheData.data.albums.length) {
+        cacheData.data.albums = newAlbums
+        updated = true
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Artist] Failed to update favorites cache:', err)
+  }
 }
 
 async function handleFavoriteToggle() {
@@ -452,6 +607,19 @@ watch(
   justify-content: center;
   width: 20px;
   height: 20px;
+}
+
+/* ...existing code... */
+
+.favoriteButton.is-favorite {
+  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  border-color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.12);
+}
+
+.favoriteButton.is-favorite .icon svg {
+  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  fill: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
 }
 
 .actionButton .icon svg {

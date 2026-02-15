@@ -18,6 +18,24 @@ const CACHE_KEY_PREFIX = 'octoPlayer.songsCache.v1'
  * Now includes localStorage caching for instant subsequent loads.
  */
 export function useLazySongs(options = {}) {
+    // Helper: background cache validation
+    async function validateCacheInBackground(filters = {}) {
+      if (!fetchFn) return;
+      try {
+        // Fetch first chunk from API
+        const result = await fetchFn(0, chunkSize, filters);
+        const apiCount = result.totalCount ?? 0;
+        if (totalCount.value !== null && apiCount !== totalCount.value) {
+          // Cache is stale, clear and reload
+          clearCache();
+          clearStoredCache();
+          await initialize(filters, { skipCache: true });
+          hasBackgroundUpdate.value = true;
+        }
+      } catch (err) {
+        // Ignore background errors
+      }
+    }
   const {
     chunkSize = 500,
     prefetchChunks = 1,
@@ -198,7 +216,9 @@ export function useLazySongs(options = {}) {
     
     // Try to load from cache unless explicitly skipped
     if (!skipCache && loadFromCache()) {
-      return
+      // Validate cache in background
+      validateCacheInBackground(filters);
+      return;
     }
     
     try {
@@ -382,10 +402,13 @@ export function useLazySongs(options = {}) {
    * Update a single item in the cache (for favorite toggles, etc.)
    */
   function updateItem(itemId, updateFn) {
+    console.log('[useLazySongs] updateItem called for itemId:', itemId)
     for (const [idx, item] of itemsMap.entries()) {
       if (item?.Id === itemId) {
-        itemsMap.set(idx, updateFn(item))
+        const updatedItem = updateFn(item)
+        itemsMap.set(idx, updatedItem)
         itemsVersion.value++
+        console.log('[useLazySongs] Item updated at index:', idx, 'new itemsVersion:', itemsVersion.value, 'new isFavorite:', updatedItem?.UserData?.IsFavorite)
         // Update cache after modification
         saveToCache()
         break

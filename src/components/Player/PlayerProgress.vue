@@ -10,7 +10,7 @@
       <div class="progress" :style="{ width: (progress || 0) + '%' }"></div>
       <div v-if="isBuffering" class="progressShimmer"></div>
     </button>
-    <span class="timeLabel">{{ formatSecondsMSS(duration) }}</span>
+    <span class="timeLabel" v-if="duration > 0">{{ formatSecondsMSS(duration) }}</span>
   </div>
 </template>
 

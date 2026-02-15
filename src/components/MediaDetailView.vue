@@ -39,12 +39,14 @@
               class="actionButton favoriteButton"
               type="button"
               @click="handleMediaFavoriteToggle"
+              @mouseenter="isHoveringFavorite = true"
+              @mouseleave="isHoveringFavorite = false"
               :class="{ 'is-favorite': props.mediaItem?.UserData?.IsFavorite }"
               :title="props.mediaItem?.UserData?.IsFavorite ? 'Remove from favorites' : 'Add to favorites'"
               :aria-label="props.mediaItem?.UserData?.IsFavorite ? 'Remove from favorites' : 'Add to favorites'"
               :disabled="!props.mediaItem || togglingMediaFavorite"
             >
-              <span class="icon"><svg viewBox="0 0 24 24"><path :d="props.mediaItem?.UserData?.IsFavorite ? mdiHeartFill : mdiHeart" fill="currentColor" /></svg></span>
+              <span class="icon"><svg viewBox="0 0 24 24"><path :d="isHoveringFavorite ? (props.mediaItem?.UserData?.IsFavorite ? mdiHeartMinus : mdiHeartPlus) : (props.mediaItem?.UserData?.IsFavorite ? mdiHeart : mdiHeartOutline)" fill="currentColor" /></svg></span>
             </button>
           </div>
         </div>
@@ -102,13 +104,14 @@ import { useRouter } from 'vue-router'
 import BackgroundGradient from './BackgroundGradient.vue'
 import Track from './Track.vue'
 import ArtistLink from './ArtistLink.vue'
-import { mdiPlay, mdiShuffle, mdiHeart } from '@mdi/js'
+import { mdiPlay, mdiShuffle, mdiHeart, mdiHeartOutline, mdiHeartPlus, mdiHeartMinus } from '@mdi/js'
 import { coverUrlFor } from '../services/mediaUtils.js'
 import { resolveEmbyImageSrc } from '../utils/embyImageUtils.js'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore } from '../stores/settings.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
 import { embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { ensureUserId } from '../services/ensureUserId.js'
 
 const props = defineProps({
   mediaType: {
@@ -153,9 +156,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['play-all', 'shuffle', 'track-play'])
+const emit = defineEmits(['play-all', 'shuffle', 'track-play', 'media-favorite-toggle'])
 
-const mdiHeartFill = mdiHeart
 const router = useRouter()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
@@ -164,6 +166,7 @@ settingsStore.hydrate()
 const trackRefs = new Map()
 const gradientCoverUrl = ref(null)
 const togglingMediaFavorite = ref(false)
+const isHoveringFavorite = ref(false)
 const { playbackStore, handlePlayItem } = usePlaybackController()
 const isCurrentlyPlaying = computed(() => playbackStore.isPlaying)
 const currentPlayingId = computed(() => playbackStore.currentTrackId)
@@ -313,15 +316,90 @@ function handleTrackPlay(e) {
 
 function handleFavoriteToggle(e) {
   const track = e?.track
+  const isFavorite = e?.isFavorite
   if (!track) return
   
-  // Update the favorite state in the tracks list
+  // Update the favorite state in the tracks list with the new value from the event
   const idx = props.tracks.findIndex(t => t.Id === track.Id)
   if (idx >= 0) {
     if (!props.tracks[idx].UserData) {
       props.tracks[idx].UserData = {}
     }
-    props.tracks[idx].UserData.IsFavorite = !props.tracks[idx].UserData.IsFavorite
+    props.tracks[idx].UserData.IsFavorite = isFavorite
+  }
+  
+  // Update songs cache
+  updateSongsCache(track.Id, isFavorite)
+}
+
+function updateSongsCache(trackId, isFavorite) {
+  try {
+    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.items || !Array.isArray(cacheData.items)) return
+    
+    // Items are stored as [[index, item], [index, item], ...] tuples
+    let updated = false
+    for (let i = 0; i < cacheData.items.length; i++) {
+      const [itemIndex, item] = cacheData.items[i]
+      if (item?.Id === trackId) {
+        cacheData.items[i] = [itemIndex, {
+          ...item,
+          UserData: {
+            ...item.UserData,
+            IsFavorite: isFavorite
+          }
+        }]
+        updated = true
+        break
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[MediaDetailView] Failed to update songs cache:', err)
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(trackId, 'track')
+  }
+}
+
+function updateFavoritesCache(itemId, itemType) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data) return
+    
+    let updated = false
+    if (itemType === 'track' && Array.isArray(cacheData.data.tracks)) {
+      const newTracks = cacheData.data.tracks.filter(t => t.Id !== itemId)
+      if (newTracks.length !== cacheData.data.tracks.length) {
+        cacheData.data.tracks = newTracks
+        updated = true
+      }
+    } else if (itemType === 'album' && Array.isArray(cacheData.data.albums)) {
+      const newAlbums = cacheData.data.albums.filter(a => a.Id !== itemId)
+      if (newAlbums.length !== cacheData.data.albums.length) {
+        cacheData.data.albums = newAlbums
+        updated = true
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[MediaDetailView] Failed to update favorites cache:', err)
   }
 }
 
@@ -329,24 +407,28 @@ async function handleMediaFavoriteToggle() {
   try {
     if (!props.mediaItem) return
     
+    console.log('[MediaDetailView] handleMediaFavoriteToggle clicked, current isFavorite:', props.mediaItem.UserData?.IsFavorite)
+    
     togglingMediaFavorite.value = true
-    const { serverUrl, token, userId } = sessionStore || {}
+    const session = await ensureUserId(sessionStore)
+    const { serverUrl, token, userId } = session || {}
     if (!serverUrl || !token || !userId) throw new Error('Not authenticated')
     
     const itemId = props.mediaItem.Id
     const isFavorite = props.mediaItem.UserData?.IsFavorite || false
+    const newValue = !isFavorite
     
     if (isFavorite) {
+      console.log('[MediaDetailView] Calling embyUnmarkFavorite')
       await embyUnmarkFavorite({ serverUrl, token, userId, itemId })
     } else {
+      console.log('[MediaDetailView] Calling embyMarkFavorite')
       await embyMarkFavorite({ serverUrl, token, userId, itemId })
     }
     
-    // Update the state
-    if (!props.mediaItem.UserData) {
-      props.mediaItem.UserData = {}
-    }
-    props.mediaItem.UserData.IsFavorite = !isFavorite
+    console.log('[MediaDetailView] API call successful, emitting media-favorite-toggle with isFavorite:', newValue)
+    // Emit event to parent to update state
+    emit('media-favorite-toggle', { mediaItem: props.mediaItem, isFavorite: newValue })
   } catch (err) {
     console.error('Failed to toggle favorite:', err)
   } finally {
@@ -569,6 +651,17 @@ watch(
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.actionButton.is-favorite {
+  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  border-color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.12);
+}
+
+.actionButton.is-favorite .icon svg {
+  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  fill: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
 }
 
 .tracksCard {

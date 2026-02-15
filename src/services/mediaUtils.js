@@ -16,6 +16,10 @@ export const TRACK_FIELDS = 'PrimaryImageAspectRatio,ImageTags,PrimaryImageItemI
 export const TRACK_FIELDS_WITH_DATE = `${TRACK_FIELDS},DateCreated`
 
 export function getArtistFromItem(item) {
+    // If no RunTimeTicks, treat as radio stream and return 'Stream'
+    if (item && !item.RunTimeTicks) {
+        return 'Stream';
+    }
     return item?.ArtistItems?.[0]?.Name || item?.Artists?.[0] || item?.AlbumArtist || ''
 }
 

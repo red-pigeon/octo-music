@@ -46,7 +46,6 @@ import { useSessionStore } from '../stores/session.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
 import { useSessionCache } from '../composables/useSessionCache.js'
-import { toggleAlbumFavorite } from '../services/toggleAlbumFavorite.js'
 import { useAlbumQuickPlay } from '../composables/useAlbumQuickPlay.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
 import { usePlaybackStore } from '../stores/playback.js'
@@ -63,6 +62,7 @@ sessionStore.hydrate()
 const cache = useSessionCache('mymusic')
 
 const albums = ref([])
+const albumsVersion = ref(0)
 const loading = ref(false)
 const error = ref('')
 const currentCoverUrl = ref(null)
@@ -117,8 +117,13 @@ function restoreMyMusicState() {
 const hasAlbums = computed(() => albums.value.length > 0)
 
 const groupedAlbums = computed(() => {
+  // Force reactivity by touching version
+  void albumsVersion.value
+  
   const artistMap = new Map()
 
+  console.log('[MyMusic] groupedAlbums recomputing, albumsVersion:', albumsVersion.value, 'albums.value.length:', albums.value.length);
+  
   albums.value.forEach((album) => {
     const artistName = album.AlbumArtist || album.ArtistItems?.[0]?.Name || album.Artists?.[0] || 'Unknown Artist'
     const artistId = album.ArtistItems?.[0]?.Id || album.AlbumArtistId || album.AlbumArtistIds?.[0] || null
@@ -130,7 +135,9 @@ const groupedAlbums = computed(() => {
     entry.albums.push(album)
   })
 
-  return Array.from(artistMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  const result = Array.from(artistMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  console.log('[MyMusic] groupedAlbums result, first album isFavorite:', result[0]?.albums[0]?.UserData?.IsFavorite);
+  return result
 })
 
 const filterLetters = computed(() => {
@@ -274,8 +281,71 @@ function handleAlbumOpen(e) {
   }
 }
 
+
 function handleAlbumFavoriteToggle(e) {
-  toggleAlbumFavorite(e)
+  const albumId = e?.album?.Id;
+  const isFavorite = e?.isFavorite;
+  if (!albumId) return;
+  
+  console.log('[MyMusic] handleAlbumFavoriteToggle:', e?.album?.Name, 'isFavorite:', isFavorite);
+  
+  // Update the album in the albums list to reflect the new favorite state
+  const idx = albums.value.findIndex(a => a.Id === albumId);
+  if (idx >= 0) {
+    console.log('[MyMusic] Found album at index:', idx, 'old isFavorite:', albums.value[idx].UserData?.IsFavorite);
+    // Create a new array and album object to ensure Vue reactivity detects the change
+    const newAlbums = [...albums.value];
+    newAlbums[idx] = {
+      ...newAlbums[idx],
+      UserData: {
+        ...newAlbums[idx].UserData,
+        IsFavorite: isFavorite
+      }
+    };
+    albums.value = newAlbums;
+    albumsVersion.value++; // Increment version to force recomputation
+    console.log('[MyMusic] Updated albums array, new isFavorite:', albums.value[idx].UserData?.IsFavorite, 'albumsVersion:', albumsVersion.value);
+    
+    // Update the cache to persist the new favorite state
+    cache.save(albums.value);
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(albumId, 'album')
+  }
+}
+
+function updateFavoritesCache(itemId, itemType) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data) return
+    
+    let updated = false
+    if (itemType === 'track' && Array.isArray(cacheData.data.tracks)) {
+      const newTracks = cacheData.data.tracks.filter(t => t.Id !== itemId)
+      if (newTracks.length !== cacheData.data.tracks.length) {
+        cacheData.data.tracks = newTracks
+        updated = true
+      }
+    } else if (itemType === 'album' && Array.isArray(cacheData.data.albums)) {
+      const newAlbums = cacheData.data.albums.filter(a => a.Id !== itemId)
+      if (newAlbums.length !== cacheData.data.albums.length) {
+        cacheData.data.albums = newAlbums
+        updated = true
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[MyMusic] Failed to update favorites cache:', err)
+  }
 }
 
 onBeforeRouteLeave((to) => {

@@ -345,6 +345,7 @@ function handleFavoriteToggle(e) {
   if (!track) return
 
   removeTrackFromFavorites(track.Id)
+  updateSongsCache(track.Id, false)
 }
 
 function handleAlbumFavoriteToggle(e) {
@@ -352,16 +353,92 @@ function handleAlbumFavoriteToggle(e) {
   if (!album) return
 
   removeAlbumFromFavorites(album.Id)
+  updateAlbumsCache(album.Id, false)
 }
 
 function removeTrackFromFavorites(trackId) {
   if (!trackId) return
   allTracks.value = allTracks.value.filter(t => t.Id !== trackId)
+  // Update the favorites cache
+  cache.save({ tracks: allTracks.value, albums: albums.value, artists: artists.value })
 }
 
 function removeAlbumFromFavorites(albumId) {
   if (!albumId) return
   albums.value = albums.value.filter(a => a.Id !== albumId)
+  // Update the favorites cache
+  cache.save({ tracks: allTracks.value, albums: albums.value, artists: artists.value })
+}
+
+function updateSongsCache(trackId, isFavorite) {
+  try {
+    // Update the songs cache if it exists
+    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.items || !Array.isArray(cacheData.items)) return
+    
+    // Items are stored as [[index, item], [index, item], ...] tuples
+    let updated = false
+    for (let i = 0; i < cacheData.items.length; i++) {
+      const [itemIndex, item] = cacheData.items[i]
+      if (item?.Id === trackId) {
+        cacheData.items[i] = [itemIndex, {
+          ...item,
+          UserData: {
+            ...item.UserData,
+            IsFavorite: isFavorite
+          }
+        }]
+        updated = true
+        break
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+      console.log('[Favorites] Updated songs cache for track:', trackId)
+    }
+  } catch (err) {
+    console.warn('[Favorites] Failed to update songs cache:', err)
+  }
+}
+
+function updateAlbumsCache(albumId, isFavorite) {
+  try {
+    // Update the albums cache if it exists
+    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data || !Array.isArray(cacheData.data)) return
+    
+    // Update the album's favorite status in the cache
+    let updated = false
+    cacheData.data = cacheData.data.map(album => {
+      if (album?.Id === albumId) {
+        updated = true
+        return {
+          ...album,
+          UserData: {
+            ...album.UserData,
+            IsFavorite: isFavorite
+          }
+        }
+      }
+      return album
+    })
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+      console.log('[Favorites] Updated albums cache for album:', albumId)
+    }
+  } catch (err) {
+    console.warn('[Favorites] Failed to update albums cache:', err)
+  }
 }
 
 async function handleAlbumOpen(e) {

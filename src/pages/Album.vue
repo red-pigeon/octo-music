@@ -11,6 +11,7 @@
     :error="error"
     emptyMessage="No tracks found for this album."
     @track-play="onTrackPlay"
+    @media-favorite-toggle="handleMediaFavoriteToggle"
   />
 </template>
 
@@ -76,6 +77,24 @@ async function fetchAlbum() {
 function onTrackPlay(e) {
   const { track, queueContext } = e
   handlePlayItem(track, false, queueContext, { type: 'album', id: route.params.id })
+}
+
+function handleMediaFavoriteToggle(e) {
+  const { mediaItem, isFavorite } = e
+  if (!mediaItem) return
+  
+  console.log('[Album] handleMediaFavoriteToggle:', mediaItem.Name, 'isFavorite:', isFavorite)
+  
+  // Update the album ref with new state
+  album.value = {
+    ...album.value,
+    UserData: {
+      ...album.value.UserData,
+      IsFavorite: isFavorite
+    }
+  }
+  
+  console.log('[Album] Updated album.value, new isFavorite:', album.value.UserData?.IsFavorite)
 }
 
 onMounted(fetchAlbum)

@@ -495,13 +495,21 @@ function handleTrackPlay(e) {
 
 function handleFavoriteToggle(e) {
   const track = e?.track
+  const isFavorite = e?.isFavorite
   if (!track) return
+
+  console.log('[Songs] handleFavoriteToggle received:', track.Name, 'isFavorite:', isFavorite)
 
   // Update in lazy loader cache
   lazySongs.updateItem(track.Id, (item) => {
-    const prevUserData = item?.UserData || {}
-    const nextUserData = { ...prevUserData, IsFavorite: !prevUserData.IsFavorite }
-    return { ...item, UserData: nextUserData }
+    console.log('[Songs] Updating item in lazy loader, old isFavorite:', item?.UserData?.IsFavorite, 'new:', isFavorite)
+    return { 
+      ...item, 
+      UserData: { 
+        ...item?.UserData, 
+        IsFavorite: isFavorite 
+      } 
+    }
   })
   
   // Also update in filtered data if active
@@ -509,14 +517,54 @@ function handleFavoriteToggle(e) {
     const list = filteredData.value
     const idx = list.findIndex(t => t?.Id === track.Id)
     if (idx >= 0) {
-      const prev = list[idx]
-      const prevUserData = prev?.UserData || {}
-      const nextUserData = { ...prevUserData, IsFavorite: !prevUserData.IsFavorite }
-      const next = { ...prev, UserData: nextUserData }
+      console.log('[Songs] Also updating filtered data at index:', idx)
       const nextList = list.slice()
-      nextList[idx] = next
+      nextList[idx] = {
+        ...list[idx],
+        UserData: {
+          ...list[idx]?.UserData,
+          IsFavorite: isFavorite
+        }
+      }
       filteredData.value = nextList
     }
+  }
+  
+  // Update favorites cache if unfavoriting
+  if (!isFavorite) {
+    updateFavoritesCache(track.Id, 'track')
+  }
+}
+
+function updateFavoritesCache(itemId, itemType) {
+  try {
+    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return
+    
+    const cacheData = JSON.parse(raw)
+    if (!cacheData?.data) return
+    
+    let updated = false
+    if (itemType === 'track' && Array.isArray(cacheData.data.tracks)) {
+      const newTracks = cacheData.data.tracks.filter(t => t.Id !== itemId)
+      if (newTracks.length !== cacheData.data.tracks.length) {
+        cacheData.data.tracks = newTracks
+        updated = true
+      }
+    } else if (itemType === 'album' && Array.isArray(cacheData.data.albums)) {
+      const newAlbums = cacheData.data.albums.filter(a => a.Id !== itemId)
+      if (newAlbums.length !== cacheData.data.albums.length) {
+        cacheData.data.albums = newAlbums
+        updated = true
+      }
+    }
+    
+    if (updated) {
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+    }
+  } catch (err) {
+    console.warn('[Songs] Failed to update favorites cache:', err)
   }
 }
 
@@ -721,10 +769,16 @@ const virtualTracks = computed(() => {
   
   if (isLetterFiltered.value || q) {
     // Filtered mode - data is fully loaded (or client-side searched)
-    return filteredTracks.value.slice(start, end)
+    const filtered = filteredTracks.value.slice(start, end)
+    console.log('[Songs] virtualTracks recomputed (filtered mode), count:', filtered.length)
+    return filtered
   }
   
   // Lazy loading mode - get items from lazy loader
+  // Touch version to ensure reactivity when items are updated
+  const version = lazySongs.itemsVersion.value
+  console.log('[Songs] virtualTracks recomputed (lazy mode), itemsVersion:', version, 'range:', start, '-', end)
+  
   // Items may be undefined if not yet loaded
   const result = []
   for (let i = start; i < end; i++) {
@@ -733,6 +787,7 @@ const virtualTracks = computed(() => {
       result.push(item)
     }
   }
+  console.log('[Songs] virtualTracks result count:', result.length, 'Sample favorite state:', result[0]?.UserData?.IsFavorite)
   return result
 })
 
