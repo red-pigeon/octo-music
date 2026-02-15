@@ -172,7 +172,7 @@ const togglingFavorite = ref(false)
 
 const isRailVariant = computed(() => props.variant === 'rail')
 
-const isStream = computed(() => !props.album?.RunTimeTicks)
+const isStream = computed(() => !props.album?.RunTimeTicks && props.album?.Type !== 'Playlist')
 
 const title = computed(() => props.album?.Name || 'Unknown Album')
 const artist = computed(() => {
@@ -561,14 +561,14 @@ async function handleToggleFavorite(e) {
 
 
 .favorite-btn.is-favorite {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  border-color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.12);
+  color: #dc2626;
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .favorite-btn.is-favorite .favorite-icon {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  fill: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  color: #dc2626;
+  fill: #dc2626;
 }
 
 .favorite-btn:disabled {

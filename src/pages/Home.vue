@@ -281,7 +281,7 @@ async function handleAlbumQuickPlay(e) {
     if (!serverUrl || !token || !userId) return
 
     // For streams (no RunTimeTicks), play directly
-    if (!album.RunTimeTicks) {
+    if (!album.RunTimeTicks && album.Type !== 'Playlist') {
       await handlePlayItem(album, false, [album], { type: 'stream', id: album.Id })
       currentCoverUrl.value = coverUrlFor(album, sessionStore) || null
       return

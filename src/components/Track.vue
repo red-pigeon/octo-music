@@ -617,11 +617,11 @@ async function handleToggleFavorite() {
 }
 
 .favorite-btn.is-favorite {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  color: #dc2626;
 }
 
 .favorite-btn.is-favorite:hover:not(:disabled) {
-  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.2);
+  background: rgba(220, 38, 38, 0.2);
 }
 
 .favorite-icon {

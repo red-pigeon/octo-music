@@ -538,8 +538,8 @@ watch(
 
 .heroActions {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  bottom: 18px;
+  right: 18px;
 }
 
 .heroKicker {
@@ -568,6 +568,10 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.playlistHero .heroTitle {
+  max-width: calc(100% - 180px);
 }
 
 .heroArtist {
@@ -654,14 +658,14 @@ watch(
 }
 
 .actionButton.is-favorite {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  border-color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.12);
+  color: #dc2626;
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .actionButton.is-favorite .icon svg {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  fill: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  color: #dc2626;
+  fill: #dc2626;
 }
 
 .tracksCard {

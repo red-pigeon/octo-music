@@ -5,6 +5,8 @@
       <div class="artistHero" :style="heroStyle">
         <div class="heroShade" aria-hidden="true"></div>
         <div class="heroContent">
+          <div class="heroKicker">Artist</div>
+          <h1 class="heroTitle">{{ artist?.Name || 'Unknown Artist' }}</h1>
           <div class="heroActions actionButtons">
             <button
               class="actionButton playButton"
@@ -50,8 +52,6 @@
               <span class="icon"><svg viewBox="0 0 24 24"><path :d="mdiInformation" /></svg></span>
             </button>
           </div>
-          <div class="heroKicker">Artist</div>
-          <h1 class="heroTitle">{{ artist?.Name || 'Unknown Artist' }}</h1>
         </div>
       </div>
 
@@ -555,8 +555,8 @@ watch(
 
 .heroActions {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  bottom: 20px;
+  right: 18px;
 }
 
 .heroKicker {
@@ -612,14 +612,14 @@ watch(
 /* ...existing code... */
 
 .favoriteButton.is-favorite {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  border-color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  background: rgba(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255), 0.12);
+  color: #dc2626;
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .favoriteButton.is-favorite .icon svg {
-  color: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
-  fill: rgb(var(--accent-r,120), var(--accent-g,90), var(--accent-b,255));
+  color: #dc2626;
+  fill: #dc2626;
 }
 
 .actionButton .icon svg {
@@ -635,6 +635,7 @@ watch(
   letter-spacing: 0.2px;
   color: #fff;
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  max-width: calc(100% - 180px);
 }
 
 .heroCounts {
