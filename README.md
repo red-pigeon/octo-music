@@ -1,6 +1,14 @@
-# Octo Player
+![Octo Player Banner](assets/banner.png)
 
-Vite + Vue 3 desktop player packaged with Electron (electron-builder).
+Vite + Vue 3 desktop music player packaged with Electron (electron-builder).
+
+## Features
+
+- **Emby Integration** - Connect to your Emby media server
+- **Music Library Browsing** - Browse albums, artists, playlists, and songs
+- **Advanced Equalizer** - Built-in EQ with presets and custom settings
+- **Favorites Management** - Mark and organize your favorite music
+- **Cross-platform** - Available for Windows and Linux
 
 ## Requirements
 
