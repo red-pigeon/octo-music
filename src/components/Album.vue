@@ -8,6 +8,7 @@
         'with-details': showDetails,
         'has-artist': showDetails && showArtist,
         'has-overlay': showPlayOnHover || showViewOnHover || hoverCoverPlays || hoverInfoOpens || tilePlays,
+        'is-stream': isStream,
       },
     ]"
     role="button"
@@ -113,7 +114,7 @@
           </span>
         </div>
         <button
-          v-if="titleOpens"
+          v-if="titleOpens && !isStream"
           class="title titleLink"
           type="button"
           @click.stop.prevent="emit('open', { album })"
@@ -140,6 +141,7 @@ import { computed, ref } from 'vue'
 import { mdiPlay, mdiPlaylistMusic, mdiHeart, mdiHeartOutline, mdiHeartMinus, mdiHeartPlus } from '@mdi/js'
 import defaultCover from '../assets/default_cover.png'
 import { formatTicksVerboseMinutesSeconds } from '../utils/timeUtils.js'
+import { getArtistFromItem } from '../services/mediaUtils.js'
 import ArtistLink from './ArtistLink.vue'
 import { computeVinylGradient } from '../utils/colorUtils.js'
 import { useEmbyCoverImage } from '../composables/useEmbyCoverImage.js'
@@ -170,13 +172,13 @@ const togglingFavorite = ref(false)
 
 const isRailVariant = computed(() => props.variant === 'rail')
 
+const isStream = computed(() => !props.album?.RunTimeTicks)
+
 const title = computed(() => props.album?.Name || 'Unknown Album')
-const artist = computed(() =>
-  props.album?.ArtistItems?.[0]?.Name ||
-  props.album?.AlbumArtist ||
-  props.album?.Artists?.[0] ||
-  'Unknown Artist'
-)
+const artist = computed(() => {
+  const artistFromItem = getArtistFromItem(props.album)
+  return artistFromItem || 'Unknown Artist'
+})
 
 const metaLine = computed(() => {
   const trackCount =
@@ -216,6 +218,11 @@ function emitHover() {
 function handleRootClick(event) {
   if (props.tilePlays) {
     emit('play', { album: props.album })
+    return
+  }
+
+  // Don't open streams - they can only be played
+  if (isStream.value) {
     return
   }
 

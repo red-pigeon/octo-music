@@ -40,7 +40,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { embyFetchJson } from '../services/emby.js'
+import { embyFetchJson, embyGetUserViews } from '../services/emby.js'
 import { useSessionStore } from '../stores/session.js'
 import MediaRail from '../components/MediaRail.vue'
 import BackgroundGradient from '../components/BackgroundGradient.vue'
@@ -280,6 +280,13 @@ async function handleAlbumQuickPlay(e) {
     const { serverUrl, token, userId } = (await ensureUserId()) || {}
     if (!serverUrl || !token || !userId) return
 
+    // For streams (no RunTimeTicks), play directly
+    if (!album.RunTimeTicks) {
+      await handlePlayItem(album, false, [album], { type: 'stream', id: album.Id })
+      currentCoverUrl.value = coverUrlFor(album, sessionStore) || null
+      return
+    }
+
     const images = '&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1'
 
     const tracksRes = await embyFetchJson({
@@ -319,7 +326,7 @@ function goToMyMusic() {
   router.push('/my-music')
 }
 
-const latestRenderable = computed(() => (latest.value || []).filter((it) => isAudioItem(it) || it?.Type === 'MusicAlbum'))
+const latestRenderable = computed(() => (latest.value || []).filter((it) => isAudioItem(it) || it?.Type === 'MusicAlbum' || it?.Type === 'Playlist'))
 const recentRenderable = computed(() => (recentlyPlayed.value || []).filter((it) => isAudioItem(it) || it?.Type === 'MusicAlbum'))
 const frequentRenderable = computed(() => (frequentlyPlayed.value || []).filter((it) => isAudioItem(it) || it?.Type === 'MusicAlbum'))
 
@@ -437,12 +444,27 @@ async function fetchRails(showSpinner = false) {
 
     const images = '&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1'
 
-    const latestPath =
+    // Get music library ID
+    let musicParentId = null
+    try {
+      const views = await embyGetUserViews({ serverUrl, token, userId })
+      const musicView = views?.Items?.find(v => v.CollectionType === 'music')
+      musicParentId = musicView?.Id || null
+    } catch (err) {
+      console.warn('Could not fetch music library ID:', err)
+    }
+
+    let latestPath =
       `/Users/${encodeURIComponent(userId)}/Items/Latest` +
-      `?IncludeItemTypes=Audio` +
+      `?IncludeItemTypes=Audio,MusicAlbum,Playlist` +
       `&Limit=${encodeURIComponent(limit)}` +
       `&Fields=${encodeURIComponent(fields)}` +
+      `&GroupItems=true` +
       images
+    
+    if (musicParentId) {
+      latestPath += `&ParentId=${encodeURIComponent(musicParentId)}`
+    }
 
     const recentPath =
       `/Users/${encodeURIComponent(userId)}/Items` +

@@ -43,8 +43,29 @@
         @click="handleContainerClick"
       >
         <template v-for="it in renderItems" :key="it.Id">
+          <!-- Latest Music: All items use Album tile styling (same as My Music) -->
+          <Album
+            v-if="useCompactAlbumTiles"
+            :album="it"
+            :coverUrl="coverUrlFor(it)"
+            appearance="flat"
+            :showDetails="true"
+            :showArtist="true"
+            :tilePlays="true"
+            :titleOpens="true"
+            :canToggleFavorite="it?.Type !== 'Playlist'"
+            :isFavorite="it.UserData?.IsFavorite || false"
+            :sessionStore="sessionStore"
+            @open="handleAlbumOpen"
+            @play="handleAlbumQuickPlay"
+            @hover="handleItemHover"
+            @mouseleave="handleItemLeave"
+            @blur="handleItemLeave"
+            @favorite-toggle="emit('albumfavoritetoggle', $event)"
+          />
+          <!-- Other rails: Use Track component for audio items -->
           <Track
-            v-if="isAudioItem(it)"
+            v-else-if="isAudioItem(it)"
             :track="it"
             :coverUrl="coverUrlFor(it)"
             variant="flat"
@@ -72,25 +93,6 @@
             @blur="handleItemLeave"
           />
           <Album
-            v-else-if="it?.Type === 'MusicAlbum' && useCompactAlbumTiles"
-            :album="it"
-            :coverUrl="coverUrlFor(it)"
-            variant="tile"
-            appearance="flat"
-            :showDetails="true"
-            :tilePlays="true"
-            :titleOpens="true"
-            :canToggleFavorite="true"
-            :isFavorite="it.UserData?.IsFavorite || false"
-            :sessionStore="sessionStore"
-            @open="handleAlbumOpen"
-            @play="handleAlbumQuickPlay"
-            @hover="handleItemHover"
-            @mouseleave="handleItemLeave"
-            @blur="handleItemLeave"
-            @favorite-toggle="emit('albumfavoritetoggle', $event)"
-          />
-          <Album
             v-else-if="it?.Type === 'MusicAlbum'"
             :album="it"
             :coverUrl="coverUrlFor(it)"
@@ -106,6 +108,21 @@
             @mouseleave="handleItemLeave"
             @blur="handleItemLeave"
             @favorite-toggle="emit('albumfavoritetoggle', $event)"
+          />
+          <Album
+            v-else-if="it?.Type === 'Playlist'"
+            :album="it"
+            :coverUrl="coverUrlFor(it)"
+            variant="rail"
+            appearance="flat"
+            :showDetails="true"
+            :showArtist="false"
+            :canToggleFavorite="false"
+            :sessionStore="sessionStore"
+            @open="handleAlbumOpen"
+            @hover="handleItemHover"
+            @mouseleave="handleItemLeave"
+            @blur="handleItemLeave"
           />
           <div v-else class="row muted">Not playable</div>
         </template>
@@ -158,15 +175,16 @@ let dragStartX = 0
 let dragStartScrollLeft = 0
 let wasDragged = false
 
-const renderItems = computed(() =>
-  props.items.filter((it) => props.isAudioItem(it) || it?.Type === 'MusicAlbum' || it?.Type === 'MusicArtist')
-)
-
-const isAlbumRail = computed(() =>
-  renderItems.value.length > 0 && renderItems.value.every((it) => !props.isAudioItem(it))
-)
+const renderItems = computed(() => {
+  const filtered = props.items.filter((it) => props.isAudioItem(it) || it?.Type === 'MusicAlbum' || it?.Type === 'MusicArtist' || it?.Type === 'Playlist')
+  return filtered
+})
 
 const useCompactAlbumTiles = computed(() => props.title === 'Latest Music')
+
+const isAlbumRail = computed(() =>
+  renderItems.value.length > 0 && (useCompactAlbumTiles.value || renderItems.value.every((it) => !props.isAudioItem(it)))
+)
 
 const isPlaylistViewRail = computed(() =>
   props.title === 'Recently Played' || props.title === 'Frequently Played'

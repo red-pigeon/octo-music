@@ -260,14 +260,25 @@ export function normalizeForDisplay(raw) {
     return normalizeServerUrl(raw)
 }
 
-export async function embyLatestMusic({ serverUrl, token, userId, limit = 30 }) {
-    const path =
+export async function embyGetUserViews({ serverUrl, token, userId }) {
+    const path = `/Users/${encodeURIComponent(userId || "")}/Views`
+    return embyFetchJson({ serverUrl, token, apiPath: path })
+}
+
+export async function embyLatestMusic({ serverUrl, token, userId, limit = 30, parentId = null }) {
+    let path =
         `/Users/${encodeURIComponent(userId || "")}/Items/Latest` +
-        `?IncludeItemTypes=Audio` +
+        `?IncludeItemTypes=Audio,MusicAlbum,Playlist` +
         `&Limit=${encodeURIComponent(limit)}` +
         `&Fields=PrimaryImageAspectRatio,ImageTags,PrimaryImageItemId,PrimaryImageTag,DateCreated,AlbumId,AlbumPrimaryImageTag,ArtistItems,Artists,AlbumArtist,RunTimeTicks,UserData` +
+        `&GroupItems=true` +
         `&EnableImageTypes=Primary,Backdrop,Thumb` +
         `&ImageTypeLimit=1`
+    
+    if (parentId) {
+        path += `&ParentId=${encodeURIComponent(parentId)}`
+    }
+    
     return embyFetchJson({ serverUrl, token, apiPath: path })
 }
 
