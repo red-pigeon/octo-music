@@ -4,7 +4,7 @@ Vite + Vue 3 desktop music player packaged with Electron (electron-builder).
 
 ## Features
 
-- **Emby Integration** - Connect to your Emby media server
+- **Emby & Jellyfin Integration** - Connect to your Emby or Jellyfin media server
 - **Music Library Browsing** - Browse albums, artists, playlists, and songs
 - **Advanced Equalizer** - Built-in EQ with presets and custom settings
 - **Favorites Management** - Mark and organize your favorite music
