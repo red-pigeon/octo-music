@@ -130,10 +130,11 @@ import Spinner from '../components/Spinner.vue'
 import Artist from '../components/Artist.vue'
 import Album from '../components/Album.vue'
 import Grid from '../components/Grid.vue'
-import { embyFetchJson } from '../services/emby.js'
+import { embyFetchJson } from '../services/api.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
-import { useSessionCache } from '../composables/useSessionCache.js'
+import { useSessionCache, typedCacheKey } from '../composables/useSessionCache.js'
+import { typedSongsCacheKey } from '../composables/useLazySongs.js'
 import { useAlbumQuickPlay } from '../composables/useAlbumQuickPlay.js'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore } from '../stores/settings.js'
@@ -373,7 +374,7 @@ function removeAlbumFromFavorites(albumId) {
 function updateSongsCache(trackId, isFavorite) {
   try {
     // Update the songs cache if it exists
-    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const cacheKey = typedSongsCacheKey('songs')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -409,7 +410,7 @@ function updateSongsCache(trackId, isFavorite) {
 function updateAlbumsCache(albumId, isFavorite) {
   try {
     // Update the albums cache if it exists
-    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const cacheKey = typedCacheKey('mymusic')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     

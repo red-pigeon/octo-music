@@ -19,7 +19,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import MediaDetailView from '../components/MediaDetailView.vue'
-import { embyFetchJson } from '../services/emby.js'
+import { embyFetchJson } from '../services/api.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, getArtistFromItem, isAudioItem } from '../services/mediaUtils.js'
 import { useSessionStore } from '../stores/session.js'

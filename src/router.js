@@ -7,7 +7,9 @@
 
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { nextTick } from 'vue'
-import { loadConnection } from './services/emby.js'
+import { loadConnection as embyLoadConnection } from './services/emby.js'
+import { loadConnection as jellyfinLoadConnection } from './services/jellyfin.js'
+import { storageGetItem } from './utils/storage.js'
 
 const Home = () => import('./pages/Home.vue')
 const Login = () => import('./pages/Login.vue')
@@ -46,7 +48,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-    const { serverUrl, token } = loadConnection()
+    const serverType = storageGetItem('octoPlayer.session.type', 'emby') || 'emby'
+    const { serverUrl, token } = serverType === 'jellyfin' ? jellyfinLoadConnection() : embyLoadConnection()
     const authed = !!(serverUrl && token)
     if (to.meta?.requiresAuth && !authed) {
         return { path: '/login' }

@@ -108,9 +108,11 @@ import { mdiPlay, mdiShuffle, mdiHeart, mdiHeartOutline, mdiHeartPlus, mdiHeartM
 import { coverUrlFor } from '../services/mediaUtils.js'
 import { resolveEmbyImageSrc } from '../utils/embyImageUtils.js'
 import { useSessionStore } from '../stores/session.js'
+import { typedCacheKey } from '../composables/useSessionCache.js'
+import { typedSongsCacheKey } from '../composables/useLazySongs.js'
 import { useSettingsStore } from '../stores/settings.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
-import { embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { embyMarkFavorite, embyUnmarkFavorite } from '../services/api.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 
 const props = defineProps({
@@ -334,7 +336,7 @@ function handleFavoriteToggle(e) {
 
 function updateSongsCache(trackId, isFavorite) {
   try {
-    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const cacheKey = typedSongsCacheKey('songs')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -373,7 +375,7 @@ function updateSongsCache(trackId, isFavorite) {
 
 function updateFavoritesCache(itemId, itemType) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const cacheKey = typedCacheKey('favorites')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     

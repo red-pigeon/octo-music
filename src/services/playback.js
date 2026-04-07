@@ -6,7 +6,7 @@
  */
 
 /* global URLSearchParams */
-import { embyFetchJson, embyPlaybackInfo } from './emby.js'
+import { embyFetchJson, embyPlaybackInfo } from './api.js'
 import { storageGetItem, storageSetItem } from '../utils/storage.js'
 import { makeBaseUrl, isAudioItem } from './mediaUtils.js'
 
@@ -92,7 +92,7 @@ async function enrichAudioItemIfNeeded(item, { serverUrl, token, userId }) {
 
 export async function playItem(
     item,
-    { serverUrl, token, userId },
+    { serverUrl, token, userId, serverType },
     skipQueueUpdate = false,
     queueContext = null
 ) {
@@ -167,10 +167,13 @@ export async function playItem(
         qs.set('MediaSourceId', mediaSourceId)
     }
 
+    const isJellyfin = serverType === 'jellyfin'
+    const audioBase = isJellyfin ? `${base}/Audio` : `${base}/emby/Audio`
+
     if (supportsDirectPlay) {
         qs.set('static', 'true')
         qs.set('Container', directPlayContainer)
-        const streamUrl = `${base}/emby/Audio/${encodeURIComponent(id)}/stream?${qs.toString()}`
+        const streamUrl = `${audioBase}/${encodeURIComponent(id)}/stream?${qs.toString()}`
         directPlayUrl = streamUrl
     } else {
         qs.set('TranscodingProtocol', 'http')
@@ -178,7 +181,7 @@ export async function playItem(
         qs.set('AudioCodec', 'mp3')
         qs.set('MaxStreamingBitrate', '320000')
         qs.set('AudioBitrate', '320000')
-        const streamUrl = `${base}/emby/Audio/${encodeURIComponent(id)}/universal?${qs.toString()}`
+        const streamUrl = `${audioBase}/${encodeURIComponent(id)}/universal?${qs.toString()}`
         directPlayUrl = streamUrl
     }
 

@@ -50,7 +50,7 @@
 <script setup>
 import { ref, watch, computed, onBeforeUnmount, provide, toRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { loadConnection } from '../services/emby.js'
+import { loadConnection } from '../services/api.js'
 import { useSettingsStore } from '../stores/settings.js'
 import { usePlaybackStore } from '../stores/playback.js'
 import { makeBaseUrl } from '../services/mediaUtils.js'
@@ -131,9 +131,12 @@ const artistFallbackCoverUrl = computed(() => {
     if (artistSrc) return artistSrc
   }
 
-  const { token, serverUrl } = loadConnection()
+  const { token, serverUrl, serverType } = loadConnection()
   const base = makeBaseUrl(serverUrl)
   if (!base || !token) return ''
+  if (serverType === 'jellyfin') {
+    return `${base}/Items/${encodeURIComponent(artistId)}/Images/Primary?quality=80&api_key=${encodeURIComponent(token)}`
+  }
   return `${base}/emby/Items/${encodeURIComponent(artistId)}/Images/Primary?quality=80&X-Emby-Token=${encodeURIComponent(token)}`
 })
 

@@ -106,13 +106,14 @@ import NowPlayingLocator from '../components/NowPlayingLocator.vue'
 import PillButton from '../components/PillButton.vue'
 import Track from '../components/Track.vue'
 import Spinner from '../components/Spinner.vue'
-import { embyGetSongsPage } from '../services/emby.js'
+import { embyGetSongsPage } from '../services/api.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore } from '../stores/settings.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
-import { useLazySongs } from '../composables/useLazySongs.js'
+import { useLazySongs, typedSongsCacheKey } from '../composables/useLazySongs.js'
+import { typedCacheKey } from '../composables/useSessionCache.js'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
@@ -538,7 +539,7 @@ function handleFavoriteToggle(e) {
 
 function updateFavoritesCache(itemId, itemType) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const cacheKey = typedCacheKey('favorites')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     

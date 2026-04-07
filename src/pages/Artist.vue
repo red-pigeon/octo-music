@@ -119,11 +119,13 @@ import BackgroundGradient from '../components/BackgroundGradient.vue'
 import MediaRail from '../components/MediaRail.vue'
 import Spinner from '../components/Spinner.vue'
 import { mdiPlay, mdiShuffle, mdiInformation, mdiHeart, mdiHeartOutline, mdiHeartPlus, mdiHeartMinus } from '@mdi/js'
-import { embyFetchJson, embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { embyFetchJson, embyMarkFavorite, embyUnmarkFavorite } from '../services/api.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem, TRACK_FIELDS } from '../services/mediaUtils.js'
 import { resolveEmbyImageSrc } from '../utils/embyImageUtils.js'
 import { useSessionStore } from '../stores/session.js'
+import { typedCacheKey } from '../composables/useSessionCache.js'
+import { typedSongsCacheKey } from '../composables/useLazySongs.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
 import { usePlaybackStore } from '../stores/playback.js'
 
@@ -349,7 +351,7 @@ function handleTrackFavoriteToggle(e) {
 
 function updateSongsCache(trackId, isFavorite) {
   try {
-    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const cacheKey = typedSongsCacheKey('songs')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -388,7 +390,7 @@ function updateSongsCache(trackId, isFavorite) {
 
 function updateAlbumsCache(albumId, isFavorite) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const cacheKey = typedCacheKey('mymusic')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -425,7 +427,7 @@ function updateAlbumsCache(albumId, isFavorite) {
 
 function updateFavoritesCache(itemId, itemType) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const cacheKey = typedCacheKey('favorites')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     

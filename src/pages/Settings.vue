@@ -115,7 +115,8 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '../stores/session.js'
 import { useSettingsStore, accentColors } from '../stores/settings.js'
-import { clearConnection } from '../services/emby.js'
+import { clearConnection as embyClearConnection } from '../services/emby.js'
+import { clearConnection as jellyfinClearConnection } from '../services/jellyfin.js'
 import BackgroundGradient from '../components/BackgroundGradient.vue'
 import { storageRemoveItem } from '../utils/storage.js'
 
@@ -157,8 +158,13 @@ async function doLogout() {
   busy.value = true
   error.value = ''
   try {
+    const type = sessionStore.serverType
     sessionStore.clear()
-    clearConnection()
+    if (type === 'jellyfin') {
+      jellyfinClearConnection()
+    } else {
+      embyClearConnection()
+    }
     await router.push('/login')
   } finally {
     busy.value = false
@@ -174,6 +180,11 @@ async function doClearCache() {
       'octoPlayer.emby.token',
       'octoPlayer.emby.userId',
       'octoPlayer.emby.userName',
+      'octoPlayer.jellyfin.serverUrl',
+      'octoPlayer.jellyfin.token',
+      'octoPlayer.jellyfin.userId',
+      'octoPlayer.jellyfin.userName',
+      'octoPlayer.session.type',
       'octoPlayer.rememberedLogin'
     ]
 

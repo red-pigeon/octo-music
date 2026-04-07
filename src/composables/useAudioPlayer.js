@@ -1,6 +1,6 @@
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import Hls from 'hls.js'
-import { loadConnection, embyReportPlaybackProgress, embyReportPlaybackStarted } from '../services/emby.js'
+import { loadConnection, embyReportPlaybackProgress, embyReportPlaybackStarted } from '../services/api.js'
 import { rewriteJellyfinStreamUrl } from '../services/jellyfinTranscode.js'
 
 const STALL_TIMEOUT_MS = 25000

@@ -6,8 +6,17 @@
  */
 
 import { ref, computed } from 'vue'
+import { storageGetItem } from '../utils/storage.js'
 
 const CACHE_KEY_PREFIX = 'octoPlayer.songsCache.v1'
+
+function getServerType() {
+  return storageGetItem('octoPlayer.session.type', 'emby') || 'emby'
+}
+
+export function typedSongsCacheKey(name) {
+  return `${CACHE_KEY_PREFIX}.${getServerType()}.${name}`
+}
 
 /**
  * Composable for lazy loading songs with virtual scroll support.
@@ -95,7 +104,7 @@ export function useLazySongs(options = {}) {
    * Get the full cache key for localStorage
    */
   function getCacheStorageKey() {
-    return `${CACHE_KEY_PREFIX}.${cacheKey}`
+    return typedSongsCacheKey(cacheKey)
   }
 
   /**

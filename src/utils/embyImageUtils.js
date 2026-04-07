@@ -49,14 +49,24 @@ export function buildEmbyItemImageSrcFromImageInfo(imageInfo, itemId, kind = 'Pr
 
     const infoIsObject = typeof imageInfo === 'object' && imageInfo.url
     const sourceUrl = infoIsObject ? String(imageInfo.url) : String(imageInfo)
-    const token = infoIsObject ? String(imageInfo.token || '') : extractQueryParam(sourceUrl, 'X-Emby-Token')
+    const embyToken = infoIsObject ? String(imageInfo.token || '') : extractQueryParam(sourceUrl, 'X-Emby-Token')
 
     const baseWithEmby = extractEmbyBaseWithEmby(sourceUrl)
-    if (!baseWithEmby) {
-        return ''
+    if (baseWithEmby) {
+        const rawUrl = `${baseWithEmby}/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(kind)}?quality=${encodeURIComponent(quality)}`
+        return resolveEmbyImageSrc({ url: rawUrl, token: embyToken })
     }
 
-    const rawUrl = `${baseWithEmby}/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(kind)}?quality=${encodeURIComponent(quality)}`
-    return resolveEmbyImageSrc({ url: rawUrl, token })
+    // Jellyfin: no /emby/ prefix — use URL origin as base, api_key as token param
+    try {
+        const jellyfinToken = infoIsObject ? '' : (extractQueryParam(sourceUrl, 'api_key') || extractQueryParam(sourceUrl, 'X-Emby-Token'))
+        const origin = new URL(sourceUrl).origin
+        if (origin && origin !== 'null') {
+            return `${origin}/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(kind)}?quality=${encodeURIComponent(quality)}` +
+                (jellyfinToken ? `&api_key=${encodeURIComponent(jellyfinToken)}` : '')
+        }
+    } catch {}
+
+    return ''
 }
 

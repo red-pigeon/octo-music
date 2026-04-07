@@ -8,10 +8,30 @@
     <div class="card">
       <div class="grid">
         <div class="field">
+          <label>Server type</label>
+          <div class="server-type-toggle" :class="{ disabled: busy }">
+            <button
+              type="button"
+              class="type-btn"
+              :class="{ active: serverType === 'emby' }"
+              :disabled="busy"
+              @click="serverType = 'emby'"
+            >Emby</button>
+            <button
+              type="button"
+              class="type-btn"
+              :class="{ active: serverType === 'jellyfin' }"
+              :disabled="busy"
+              @click="serverType = 'jellyfin'"
+            >Jellyfin</button>
+          </div>
+        </div>
+
+        <div class="field">
           <label for="serverUrl">Server URL</label>
           <input
             id="serverUrl"
-            placeholder="http://localhost:8096"
+            :placeholder="serverType === 'jellyfin' ? 'http://localhost:8096' : 'http://localhost:8096'"
             v-model="serverUrl"
             :disabled="busy"
           />
@@ -66,7 +86,8 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { embyLogin, embySystemInfo, saveConnection, clearConnection, loadConnection } from '../services/emby.js'
+import { embyLogin, embySystemInfo, saveConnection as embySaveConnection, clearConnection as embyClearConnection } from '../services/emby.js'
+import { jellyfinLogin, jellyfinSystemInfo, saveConnection as jellyfinSaveConnection, clearConnection as jellyfinClearConnection } from '../services/jellyfin.js'
 import { useSessionStore } from '../stores/session.js'
 import { storageGetItem, storageRemoveItem, storageSetItem } from '../utils/storage.js'
 
@@ -76,6 +97,7 @@ session.hydrate()
 
 const remembered = JSON.parse(storageGetItem('octoPlayer.rememberedLogin', '{}') || '{}')
 
+const serverType = ref(session.serverType || remembered.serverType || 'emby')
 const serverUrl = ref(session.serverUrl || remembered.serverUrl || '')
 const username = ref(session.userName || remembered.username || '')
 const password = ref('')
@@ -89,14 +111,15 @@ async function doLogin() {
   statusKind.value = ''
   busy.value = true
 
+  const isJellyfin = serverType.value === 'jellyfin'
+
   try {
-    const auth = await embyLogin({
-      serverUrl: serverUrl.value,
-      username: username.value,
-      password: password.value
-    })
+    const auth = isJellyfin
+      ? await jellyfinLogin({ serverUrl: serverUrl.value, username: username.value, password: password.value })
+      : await embyLogin({ serverUrl: serverUrl.value, username: username.value, password: password.value })
 
     const connectionData = {
+      serverType: serverType.value,
       serverUrl: serverUrl.value,
       token: auth.AccessToken,
       userId: auth?.User?.Id,
@@ -104,10 +127,15 @@ async function doLogin() {
     }
 
     session.set(connectionData)
-    saveConnection(connectionData)
+    if (isJellyfin) {
+      jellyfinSaveConnection(connectionData)
+    } else {
+      embySaveConnection(connectionData)
+    }
 
     if (rememberMe.value) {
       storageSetItem('octoPlayer.rememberedLogin', JSON.stringify({
+        serverType: serverType.value,
         serverUrl: serverUrl.value,
         username: username.value
       }))
@@ -115,12 +143,11 @@ async function doLogin() {
       storageRemoveItem('octoPlayer.rememberedLogin')
     }
 
-    const info = await embySystemInfo({
-      serverUrl: serverUrl.value,
-      token: auth.AccessToken
-    })
+    const info = isJellyfin
+      ? await jellyfinSystemInfo({ serverUrl: serverUrl.value, token: auth.AccessToken })
+      : await embySystemInfo({ serverUrl: serverUrl.value, token: auth.AccessToken })
 
-    const name = info?.ServerName || 'Emby'
+    const name = info?.ServerName || (isJellyfin ? 'Jellyfin' : 'Emby')
     const version = info?.Version ? `v${info.Version}` : ''
     status.value = `Connected to ${name} ${version}`
     statusKind.value = 'ok'
@@ -136,15 +163,19 @@ async function doLogin() {
 }
 
 function doClear() {
+  const type = session.serverType || serverType.value
   session.clear()
-  clearConnection()
+  if (type === 'jellyfin') {
+    jellyfinClearConnection()
+  } else {
+    embyClearConnection()
+  }
   storageRemoveItem('octoPlayer.rememberedLogin')
-  const c = loadConnection()
-  serverUrl.value = c.serverUrl || ''
-  username.value = c.userName || ''
+  serverUrl.value = ''
+  username.value = ''
   password.value = ''
   rememberMe.value = false
-  status.value = c.token ? 'Token saved (you can re-login anytime).' : 'Not connected yet.'
+  status.value = 'Not connected yet.'
   statusKind.value = ''
 }
 </script>
@@ -245,6 +276,41 @@ function doClear() {
 .field input:focus {
   background: rgba(255, 255, 255, 0.1);
   outline: none;
+}
+
+.server-type-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.server-type-toggle.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.type-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.type-btn.active {
+  background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.25);
+  border-color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.6);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .actions {

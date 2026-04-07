@@ -12,7 +12,8 @@ import {
   globalShortcut,
   Menu,
   Tray,
-  nativeImage
+  nativeImage,
+  session
 } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -603,6 +604,23 @@ readyPromise.then(() => {
       }
     })
     
+    // In dev mode the renderer is served from localhost:5173, which causes browsers
+    // to enforce CORS when loading images from media servers (Emby/Jellyfin).
+    // Inject 'Access-Control-Allow-Origin: *' into image responses so canvas-based
+    // colour extraction works in both dev and production.
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const isImagePath = /\/Images\//i.test(details.url)
+      if (isImagePath) {
+        const headers = { ...details.responseHeaders }
+        if (!headers['access-control-allow-origin']) {
+          headers['Access-Control-Allow-Origin'] = ['*']
+        }
+        callback({ responseHeaders: headers })
+      } else {
+        callback({ responseHeaders: details.responseHeaders })
+      }
+    })
+
     createWindow()
     console.log('[Main] Window created - after createWindow call')
 

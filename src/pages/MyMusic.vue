@@ -41,11 +41,11 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
-import { embyFetchJson, embyGetAllAlbums } from '../services/emby.js'
+import { embyFetchJson, embyGetAllAlbums } from '../services/api.js'
 import { useSessionStore } from '../stores/session.js'
 import { ensureUserId } from '../services/ensureUserId.js'
 import { coverUrlFor, isAudioItem } from '../services/mediaUtils.js'
-import { useSessionCache } from '../composables/useSessionCache.js'
+import { useSessionCache, typedCacheKey } from '../composables/useSessionCache.js'
 import { useAlbumQuickPlay } from '../composables/useAlbumQuickPlay.js'
 import { usePlaybackController } from '../composables/usePlaybackController.js'
 import { usePlaybackStore } from '../stores/playback.js'
@@ -318,7 +318,7 @@ function handleAlbumFavoriteToggle(e) {
 
 function updateFavoritesCache(itemId, itemType) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const cacheKey = typedCacheKey('favorites')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     

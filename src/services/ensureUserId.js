@@ -1,4 +1,4 @@
-import { embyFetchJson } from './emby.js'
+import { embyFetchJson } from './api.js'
 
 export async function ensureUserId(sessionStore) {
     if (sessionStore?.userId || !sessionStore?.serverUrl || !sessionStore?.token) {

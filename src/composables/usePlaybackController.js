@@ -12,11 +12,11 @@ export function usePlaybackController() {
     const isCurrentlyPlaying = computed(() => playbackStore.isPlaying)
 
     async function handlePlayItem(item, skipQueueUpdate = false, queueContext = null, origin = null) {
-        const { serverUrl, token, userId } = sessionStore
+        const { serverUrl, token, userId, serverType } = sessionStore
         const contextList = Array.isArray(queueContext)
             ? queueContext
             : queueContext?.value || playbackStore.queue
-        const playbackInfo = await playItemUtil(item, { serverUrl, token, userId }, skipQueueUpdate, contextList)
+        const playbackInfo = await playItemUtil(item, { serverUrl, token, userId, serverType }, skipQueueUpdate, contextList)
         if (!playbackInfo) {
             return null
         }

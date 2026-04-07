@@ -79,7 +79,7 @@ import { mdiPlay, mdiPause, mdiHeart, mdiHeartOutline, mdiHeartMinus, mdiHeartPl
 import defaultCover from '../assets/default_cover.png'
 import { formatTicksMSS, formatDateDMY } from '../utils/timeUtils.js'
 import { useEmbyCoverImage } from '../composables/useEmbyCoverImage.js'
-import { embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { embyMarkFavorite, embyUnmarkFavorite } from '../services/api.js'
 import { getArtistFromItem } from '../services/mediaUtils.js'
 import ArtistLink from './ArtistLink.vue'
 

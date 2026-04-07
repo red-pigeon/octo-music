@@ -145,7 +145,7 @@ import { getArtistFromItem } from '../services/mediaUtils.js'
 import ArtistLink from './ArtistLink.vue'
 import { computeVinylGradient } from '../utils/colorUtils.js'
 import { useEmbyCoverImage } from '../composables/useEmbyCoverImage.js'
-import { embyMarkFavorite, embyUnmarkFavorite } from '../services/emby.js'
+import { embyMarkFavorite, embyUnmarkFavorite } from '../services/api.js'
 
 const props = defineProps({
   album: { type: Object, default: null },

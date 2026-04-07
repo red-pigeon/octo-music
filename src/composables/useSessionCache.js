@@ -6,8 +6,21 @@
  */
 
 import { ref } from 'vue'
+import { storageGetItem } from '../utils/storage.js'
 
 const CACHE_KEY_PREFIX = 'octoPlayer.cache.v1'
+
+function getServerType() {
+  return storageGetItem('octoPlayer.session.type', 'emby') || 'emby'
+}
+
+/**
+ * Returns the server-type-namespaced localStorage key for a named cache.
+ * Use this anywhere a cache key is needed outside of useSessionCache itself.
+ */
+export function typedCacheKey(name) {
+  return `${CACHE_KEY_PREFIX}.${getServerType()}.${name}`
+}
 
 /**
  * Composable for localStorage caching of page data.
@@ -28,7 +41,7 @@ export function useSessionCache(cacheKey) {
    * Get the full cache key for localStorage
    */
   function getCacheStorageKey() {
-    return `${CACHE_KEY_PREFIX}.${cacheKey}`
+    return typedCacheKey(cacheKey)
   }
 
   /**

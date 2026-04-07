@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import { loadConnection } from '../services/emby.js'
+import { loadConnection } from '../services/api.js'
 import { makeBaseUrl } from '../services/mediaUtils.js'
 import { resolveEmbyImageSrc } from '../utils/embyImageUtils.js'
 import { buildArtistPrimaryFallbackSrc } from './useEmbyCoverImage.js'
@@ -122,9 +122,13 @@ export function usePlayerCoverImage(nowPlaying) {
 
       if (!coverInfo) {
         if (artistId) {
-          const { token, serverUrl } = loadConnection()
-          const base = makeBaseUrl(serverUrl)
-          const artistUrl = base ? `${base}/emby/Items/${encodeURIComponent(artistId)}/Images/Primary?quality=80` : ''
+        const { token, serverUrl, serverType } = loadConnection()
+        const base = makeBaseUrl(serverUrl)
+        const artistUrl = base
+          ? serverType === 'jellyfin'
+            ? `${base}/Items/${encodeURIComponent(artistId)}/Images/Primary?quality=80&api_key=${encodeURIComponent(token)}`
+            : `${base}/emby/Items/${encodeURIComponent(artistId)}/Images/Primary?quality=80`
+          : ''
           const data = await fetchImageAsDataUrl(artistUrl, token)
           if (data) {
             coverImageUrl.value = data

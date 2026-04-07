@@ -40,8 +40,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { embyFetchJson, embyGetUserViews } from '../services/emby.js'
+import { embyFetchJson, embyGetUserViews } from '../services/api.js'
 import { useSessionStore } from '../stores/session.js'
+import { typedCacheKey } from '../composables/useSessionCache.js'
+import { typedSongsCacheKey } from '../composables/useLazySongs.js'
 import MediaRail from '../components/MediaRail.vue'
 import BackgroundGradient from '../components/BackgroundGradient.vue'
 import PillButton from '../components/PillButton.vue'
@@ -134,7 +136,7 @@ function handleTrackFavoriteToggle(e) {
 
 function updateSongsCache(trackId, isFavorite) {
   try {
-    const cacheKey = 'octoPlayer.songsCache.v1.songs'
+    const cacheKey = typedSongsCacheKey('songs')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -173,7 +175,7 @@ function updateSongsCache(trackId, isFavorite) {
 
 function updateAlbumsCache(albumId, isFavorite) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.mymusic'
+    const cacheKey = typedCacheKey('mymusic')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -210,7 +212,7 @@ function updateAlbumsCache(albumId, isFavorite) {
 
 function updateFavoritesCache(itemId, itemType) {
   try {
-    const cacheKey = 'octoPlayer.cache.v1.favorites'
+    const cacheKey = typedCacheKey('favorites')
     const raw = localStorage.getItem(cacheKey)
     if (!raw) return
     
@@ -280,14 +282,45 @@ async function handleAlbumQuickPlay(e) {
     const { serverUrl, token, userId } = (await ensureUserId()) || {}
     if (!serverUrl || !token || !userId) return
 
+    const images = '&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1'
+
+    // If the item is itself an audio track (e.g. Jellyfin /Items/Latest can return
+    // individual Audio items instead of grouped MusicAlbum items), play it directly
+    // and load its sibling tracks from the parent album for a proper queue.
+    if (isAudioItem(album)) {
+      if (album.AlbumId) {
+        const sibRes = await embyFetchJson({
+          serverUrl,
+          token,
+          apiPath:
+            `/Users/${encodeURIComponent(userId)}/Items` +
+            `?ParentId=${encodeURIComponent(album.AlbumId)}` +
+            `&IncludeItemTypes=Audio` +
+            `&SortBy=ParentIndexNumber,IndexNumber` +
+            `&Recursive=true` +
+            `&Limit=200` +
+            `&Fields=${encodeURIComponent(TRACK_FIELDS)}` +
+            images,
+        })
+        const siblings = (sibRes?.Items || []).filter(isAudioItem)
+        if (siblings.length > 0) {
+          await handlePlayItem(album, false, siblings, { type: 'album', id: album.AlbumId })
+          currentCoverUrl.value = coverUrlFor(album, sessionStore) || null
+          return
+        }
+      }
+      // No album context - play as a single track
+      await handlePlayItem(album, false, [album], { type: 'track', id: album.Id })
+      currentCoverUrl.value = coverUrlFor(album, sessionStore) || null
+      return
+    }
+
     // For streams (no RunTimeTicks), play directly
     if (!album.RunTimeTicks && album.Type !== 'Playlist') {
       await handlePlayItem(album, false, [album], { type: 'stream', id: album.Id })
       currentCoverUrl.value = coverUrlFor(album, sessionStore) || null
       return
     }
-
-    const images = '&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1'
 
     const tracksRes = await embyFetchJson({
       serverUrl,

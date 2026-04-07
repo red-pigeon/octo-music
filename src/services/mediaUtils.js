@@ -84,6 +84,14 @@ export function coverUrlFor(item, session) {
         return ''
     }
 
+    if (session?.serverType === 'jellyfin') {
+        const imageUrl =
+            `${base}/Items/${encodeURIComponent(itemId)}/Images/${kind}?quality=80` +
+            (tag ? `&tag=${encodeURIComponent(tag)}` : '') +
+            `&api_key=${encodeURIComponent(token)}`
+        return imageUrl
+    }
+
     const imageUrl =
         `${base}/emby/Items/${encodeURIComponent(itemId)}/Images/${kind}?quality=80` +
         (tag ? `&tag=${encodeURIComponent(tag)}` : '')

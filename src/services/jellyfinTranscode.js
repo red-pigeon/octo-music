@@ -61,6 +61,12 @@ export function rewriteJellyfinStreamUrl(streamUrl, settings, context = {}) {
     stripDirectPlayParams()
     stripTranscodeParams()
 
+    // Jellyfin uses /stream for direct (static) play and /universal for transcoding.
+    // If the original URL ended with /stream (direct play), switch to /universal.
+    if (urlObj.pathname.toLowerCase().endsWith('/stream')) {
+        urlObj.pathname = urlObj.pathname.slice(0, -7) + '/universal'
+    }
+
     params.set('TranscodingProtocol', 'http')
     params.set('Container', 'mp3')
     params.set('AudioCodec', 'mp3')
